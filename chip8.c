@@ -15,7 +15,7 @@
 #define FONT_ADDR  (0x200-(5*16))
 
 static uint8_t ram[RAM_SIZE];
-static uint8_t vram[VIDEO_ROWS * (VIDEO_COLS)];
+static uint8_t vram[VIDEO_ROWS * VIDEO_COLS];
 static uint16_t stack[STACK_SIZE];
 static struct {
     union {
@@ -79,19 +79,19 @@ void v8_init(void)
         0xf0, 0x90, 0x90, 0x90, 0xf0,
         0x20, 0x60, 0x20, 0x20, 0x70,
         0xf0, 0x10, 0xf0, 0x80, 0xf0,
-        0xF0, 0x10, 0xF0, 0x10, 0xF0,
-        0x90, 0x90, 0xF0, 0x10, 0x10,
-        0xF0, 0x80, 0xF0, 0x10, 0xF0,
-        0xF0, 0x80, 0xF0, 0x90, 0xF0,
-        0xF0, 0x10, 0x20, 0x40, 0x40,
-        0xF0, 0x90, 0xF0, 0x90, 0xF0,
-        0xF0, 0x90, 0xF0, 0x10, 0xF0,
-        0xF0, 0x90, 0xF0, 0x90, 0x90,
-        0xE0, 0x90, 0xE0, 0x90, 0xE0,
-        0xF0, 0x80, 0x80, 0x80, 0xF0,
-        0xE0, 0x90, 0x90, 0x90, 0xE0,
-        0xF0, 0x80, 0xF0, 0x80, 0xF0,
-        0xF0, 0x80, 0xF0, 0x80, 0x80,
+        0xf0, 0x10, 0xf0, 0x10, 0xf0,
+        0x90, 0x90, 0xf0, 0x10, 0x10,
+        0xf0, 0x80, 0xf0, 0x10, 0xf0,
+        0xf0, 0x80, 0xf0, 0x90, 0xf0,
+        0xf0, 0x10, 0x20, 0x40, 0x40,
+        0xf0, 0x90, 0xf0, 0x90, 0xf0,
+        0xf0, 0x90, 0xf0, 0x10, 0xf0,
+        0xf0, 0x90, 0xf0, 0x90, 0x90,
+        0xe0, 0x90, 0xe0, 0x90, 0xe0,
+        0xf0, 0x80, 0x80, 0x80, 0xf0,
+        0xe0, 0x90, 0x90, 0x90, 0xe0,
+        0xf0, 0x80, 0xf0, 0x80, 0xf0,
+        0xf0, 0x80, 0xf0, 0x80, 0x80,
     };
 
     memcpy(&ram[FONT_ADDR], font, sizeof(font));
@@ -122,67 +122,81 @@ void v8_swap(void)
         }
         printw("\n");
     }
+
+    mvprintw(0, 65, "pc:%04x = %04x", regs.pc, ram[regs.pc-2]);
+    mvprintw(1, 65, "sp:%04x = %04x", regs.sp, swap16(*(uint16_t*)&ram[regs.sp]));
+    mvprintw(2, 65, "i :%04x = %02x", regs.i, ram[regs.i]);
+    mvprintw(3, 65, "dt: %02x st: %02x", regs.dt, regs.st);
+
+    for (int i = 0, y=4; i < 8; i++, y++)
+        mvprintw(y, 65, "v%1x: %02x v%1x: %02x", i, regs.v[i], i+8, regs.v[i+8]);
     refresh();
-//    usleep(16000);
 }
 
-void v8_draw(uint8_t x, uint8_t y, uint8_t n)
+void v8_draw(uint8_t x, uint8_t y, uint8_t nrows)
 {
     x &= 0x3f;
     y &= 0x1f;
 
-    for (unsigned i = 0; i < n && y < VIDEO_ROWS; ++i)
+    for (unsigned row = 0; row < nrows; ++row)
     {
-        uint8_t src  = ram[regs.i+i] >> 4;
-        uint8_t *dst = &vram[y++ * VIDEO_COLS+x];
-        for (unsigned j = 0; j < 4 && (x+j) < VIDEO_COLS; ++j)
+        uint8_t  src = ram[regs.i+row];
+        for (unsigned col = 0; col < 8; ++col)
         {
-            uint8_t bit = (src >> (3-j)) & 1;
+            if (src & 0x80)
+            {
+                if (x + col >= VIDEO_COLS || y + row >= VIDEO_ROWS)
+                    continue;
+                uint8_t *dst = &vram[(y + row) * VIDEO_COLS + (x+col)];
 
-            if (!bit && dst[j])
-                regs.vf = 1;
+                *dst ^= (src >> 7);
+                regs.vf = !*dst;
+            }
 
-            dst[j] ^= bit;
+            src <<= 1;
         }
     }
 }
 
-uint8_t i8_getch(int test)
+static uint8_t kbd[16];
+void i8_poll(void)
 {
-    uint8_t key;
+    memset(kbd, 0, sizeof(kbd));
+    int rk = getch();
+
+    if (rk != ERR)
+    {
+        if (rk >= '0' && rk <= '9')
+            rk -= '0';
+        else if (rk >= 'a' && rk <= 'f')
+            rk = (rk - 'a') + 10;
+        else if (rk >= 'A' && rk <= 'F')
+            rk = (rk - 'A') + 10;
+
+        kbd[rk] = 1;
+    }
+}
+
+int i8_getch(int test)
+{
 
     if (test < 0)
     {
-        timeout(-1);
-        key = getch();
-//        printf("\a");
-        timeout(0);
+        for (int i = 0; i < 16; ++i)
+        {
+            if (kbd[i])
+                return i;
+        }
+
+        return -1;
     }
     else
-    {
-        key = getch();
-        if (key == ERR)
-            key = 0xff; // is this ok?
-    }
-    if (key >= '0' && key <= '9')
-        key -= '0';
-    else if (key >= 'a' && key <= 'f')
-        key = (key - 'a') + 10;
-    else if (key >= 'A' && key <= 'F')
-        key = (key - 'A') + 10;
-
-    if (test >= 0 && key == test)
-    {
-//        printf("\a");
-        key = 1;
-    }
-
-    return key;
+        return kbd[test & 0xf];
 }
 
 #define NIBBLE(m, n) (((m) >> ((n) * 4)) & 0x000f)
 #define N(m)      NIBBLE(m, 0)
-#define NN(m)     ((m) & 0x00ff)
+#define KK(m)     ((m) & 0x00ff)
 #define NNN(m)    ((m) & 0x0fff)
 #define N2V(m, n) regs.v[NIBBLE(m, n)]
 
@@ -204,17 +218,27 @@ void c8_step()
 {
     static uint16_t last_pc = 0;
     static unsigned cycles  = 0;
-    uint16_t instr = ram_read16(regs.pc);
+    const uint16_t instr = ram_read16(regs.pc);
     last_pc = regs.pc;
     regs.pc += 2;
 
-    move(33, 0);
-    printw("instr: %04x pc: %04x\n", instr, regs.pc);
+    const uint8_t x    = (instr >> 8) & 0x0f;
+    const uint8_t y    = (instr >> 4) & 0xf;
+    const uint8_t kk   = instr & 0x00ff;
+    const uint16_t nnn = instr & 0x0fff;
+
+    uint8_t *vx = &regs.v[x];
+    uint8_t *vy = &regs.v[y];
+
+    if (last_pc == 610)
+    {
+        last_pc = last_pc + 0;
+    }
 
     switch (instr >> 12)
     {
     case 0x0: // these call host functions
-        switch (NNN(instr))
+        switch (nnn)
         {
         case 0x00e0: // cls
             v8_clear();
@@ -224,7 +248,7 @@ void c8_step()
             break;
         default: // sys addr
         {
-            uint16_t addr = NNN(instr);
+            uint16_t addr = nnn;
             if (addr == last_pc)
                 c8_halt();
             regs.pc = addr;
@@ -233,74 +257,71 @@ void c8_step()
         }
         break;
     case 0x1: // jp nnn
-        regs.pc = NNN(instr);
-        if (NNN(instr) == last_pc)
+        regs.pc = nnn;
+        if (nnn == last_pc)
             c8_halt();
         break;
     case 0x2: // call nnn
         stack[regs.sp++] = regs.pc;
-        regs.pc = NNN(instr);
-        if (NNN(instr) == last_pc)
+        regs.pc = nnn;
+        if (nnn == last_pc)
             c8_halt();
         break;
     case 0x3: // se vx, kk
-        if (N2V(instr, 2) == NN(instr))
+        if (*vx == kk)
             regs.pc += 2;
         break;
     case 0x4: // sne vx, kk
-        if (N2V(instr, 2) != NN(instr))
+        if (*vx != kk)
             regs.pc += 2;
         break;
     case 0x5: // se vx, vy
-        if (N2V(instr, 2) == N2V(instr, 1))
+        if (*vx == *vy)
             regs.pc += 2;
         break;
     case 0x6: // ld vx, kk
-        N2V(instr, 2) = NN(instr);
+        *vx = kk;
         break;
     case 0x7: // add vx, kk
-        N2V(instr, 2) += NN(instr);
+        *vx = *vx + kk;
         break;
     case 0x8: // op vx, vy
     {
-        uint32_t uval;
-        int32_t  ival;
         switch (instr & 0x000f)
         {
         case 0x0: // ld
-             N2V(instr, 2) = N2V(instr, 1);
+            *vx = *vy;
             break;
         case 0x1: // or
-            N2V(instr, 2) = N2V(instr, 2) | N2V(instr, 1);
+            *vx = *vx | *vy;
             break;
         case 0x2: // and
-            N2V(instr, 2) = N2V(instr, 2) & N2V(instr, 1);
+            *vx = *vx & *vy;
             break;
         case 0x3: // xor
-            N2V(instr, 2) = N2V(instr, 2) ^ N2V(instr, 1);
+            *vx = *vx ^ *vy;
             break;
         case 0x4: // add
-            uval = (uint32_t)N2V(instr, 2) + (uint32_t)N2V(instr, 1);
-            N2V(instr, 2) += N2V(instr, 1);
-            regs.vf = !!(uval & 0xff00);
+            regs.vf = ((uint32_t)*vx + (uint32_t)*vy) > 0xff;
+            *vx     = *vx + *vy;
             break;
         case 0x5: // sub
-            ival = (int32_t)N2V(instr, 2) - (int32_t)N2V(instr, 1);
-            regs.vf = ival > 0;
-            N2V(instr, 2) -= N2V(instr, 1);
+            regs.vf = *vx >= *vy;
+            *vx     = *vx - *vy;
             break;
         case 0x6: // shr
-            regs.vf = N2V(instr, 1) & 1;
-            N2V(instr, 2) = N2V(instr, 1) >> 1;
+            // XXX: doc says vx = vy >> 1, vf = vy &1
+            regs.vf = *vx & 1;
+            *vx     = *vx >> 1;
             break;
         case 0x7: // subn
-            ival = (int32_t)N2V(instr, 1) - (int32_t)N2V(instr, 2);
-            N2V(instr, 2) = N2V(instr, 1) - N2V(instr, 2);
-            regs.vf = ival > 0;
+            regs.vf = *vy > *vx;
+            *vx     = *vy - *vx;
             break;
         case 0xe: // shl
-            regs.vf = N2V(instr, 1) >> 7;
-            N2V(instr, 2) = N2V(instr, 1) << 1;
+            // XXX: doc says vx = vy << 1, vf = vy >> 7
+            regs.vf = *vx >> 7;
+            *vx     = *vx << 1;
             break;
         default:
             invalid_instruction(instr);
@@ -308,15 +329,15 @@ void c8_step()
         break;
     }
     case 0x9: // sne vx, vy
-        if (N2V(instr, 2) != N2V(instr, 1))
+        if (*vx != *vy)
             regs.pc += 2;
         break;
     case 0xa: // ld i, nnn
-        regs.i = NNN(instr);
+        regs.i = nnn;
         break;
     case 0xb: // jp v0, addr
     {
-        uint16_t addr = NNN(instr) + regs.v0;
+        uint16_t addr = nnn + regs.v0;
 
         if (addr == last_pc)
             c8_halt();
@@ -324,20 +345,20 @@ void c8_step()
         break;
     }
     case 0xc: // rnd vx, byte
-        N2V(instr, 2) = rand() & NN(instr);
+        *vx = rand() & kk;
         break;
     case 0xd: // drw vx, vy, nibble
-        v8_draw(N2V(instr, 2), N2V(instr, 1), N(instr));
+        v8_draw(*vx, *vy, N(instr));
         break;
     case 0xe: // op vx
         switch (instr & 0xff)
         {
         case 0x9e: // skp vx
-            if (i8_getch(N2V(instr, 2)))
+            if (i8_getch(*vx))
                 regs.pc += 2;
             break;
         case 0xa1: // sknp vx
-            if (!i8_getch(N2V(instr, 2)))
+            if (!i8_getch(*vx))
                 regs.pc += 2;
             break;
         default:
@@ -348,37 +369,42 @@ void c8_step()
         switch (instr & 0xff)
         {
         case 0x07: // ld vx, dt
-            N2V(instr, 2) = regs.dt;
+            *vx = regs.dt;
             break;
         case 0x0a: // ld vx, key
-            N2V(instr, 2) = i8_getch(-1);
+        {
+            int result = i8_getch(-1);
+            if (result < 0)
+                regs.pc -= 2;
+            else
+                *vx = result;
             break;
+        }
         case 0x15: // ld dt, vx
-            regs.dt = N2V(instr, 2);
+            regs.dt = *vx;
             break;
         case 0x18: // ld st, vx
-            regs.st = N2V(instr, 2);
+            regs.st = *vx;
             break;
         case 0x1e: // add i, vx
-            regs.i = NNN(regs.i + N2V(instr, 2));
+            regs.vf = (regs.i + *vx) > 255; // XXX: undocumented
+            regs.i  = regs.i + *vx;
             break;
         case 0x29: // ld f, vx
-            regs.i = FONT_ADDR + N2V(instr, 2) * 5;
+            regs.i = FONT_ADDR + *vx * 5;
             break;
         case 0x33: // ld b, vx
-            ram[NNN(regs.i+0)] = N2V(instr, 2) / 100;
-            ram[NNN(regs.i+1)] = N2V(instr, 2) / 10 % 10;
-            ram[NNN(regs.i+2)] = N2V(instr, 2) % 10;
+            ram[NNN(regs.i+0)] = *vx / 100;
+            ram[NNN(regs.i+1)] = *vx / 10 % 10;
+            ram[NNN(regs.i+2)] = *vx % 10;
             break;
         case 0x55: // ld [i], vx
-            for (int i = 0; i < NIBBLE(instr, 2)+1; ++i)
-                ram[NNN(regs.i+i)] = regs.v[i];
-            regs.i = NNN(regs.i+NIBBLE(instr, 2)+1);
+            memcpy(ram+regs.i, regs.v, x+1);
+            regs.i = regs.i+x+1;
             break;
         case 0x65: // ld vx, [i]
-            for (int i = 0; i < NIBBLE(instr, 2)+1; ++i)
-                regs.v[i] = ram[NNN(regs.i+i)];
-            regs.i = NNN(regs.i+NIBBLE(instr, 2)+1);
+            memcpy(regs.v, ram+regs.i, x+1);
+            regs.i = regs.i+x+1;
             break;
         default:
             invalid_instruction(instr);
@@ -390,7 +416,7 @@ void c8_step()
 
     cycles++;
 
-    if (cycles % 2933 == 0)
+    if (cycles % 29333 == 0)
     {
         if (regs.dt)
             regs.dt--;
@@ -399,13 +425,8 @@ void c8_step()
             regs.st--;
     }
 
-    printw("i:%04x sp:%04x dt:%04x st:%04x\n", regs.i, regs.sp, regs.dt, regs.st);
-    for (unsigned i = 0; i < 16; ++i)
-        printw("%01x:%02x ", i, regs.v[i]);
-    printw("\n");
-
     v8_swap();
-
+    i8_poll();
 }
 
 int main(int argc, char *argv[])
