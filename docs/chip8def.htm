@@ -1,0 +1,603 @@
+<html><head><!-- Created by AOLpress/1.2 --><title>Chip-8 Instruction Set</title></head>
+<body>
+<p>
+  </p><hr>
+<h1>
+  Chip 8 instruction set
+</h1>
+<p>
+(all values in Hexadecimal unless stated)
+  </p><hr>
+<p>
+The Chip-8 instruction set runs in 4k of memory (addresses 000 - FFF). Programs
+start at 200, memory before that containing the chip-8 interpreter on a real
+1802 based machine. The screen is 64 x 32 (128 x 64 on superchip) and is
+monochrome. Their is a sound buzzer
+</p><p>
+There are 16 primary registers, called v0 - vf. vf is used for carries and
+borrows and shouldn't really be used as a general purpose register. There
+is a 12 bit index register called I. There is a program counter and stack
+pointer, but neither of these are accessible from program code.
+</p><p>
+There are 2 counters, the sound timer and the delay timer. Both count down
+at about 60Hz (on Chip8 they count down in threes using the PC's 18.2Hz Clock).
+When the sound timer is non-zero the buzzer sounds.
+</p><p>
+This is the Chip-8 Instruction set as I understand it....
+</p><p>
+<table border="1" cellpadding="2">
+  <tbody><tr>
+    <td>
+      Code
+    </td>
+    <td>
+      Assembler
+    </td>
+    <td>
+      Description
+    </td>
+    <td>
+      Notes
+    </td>
+  </tr>
+  <tr>
+    <td>
+      00Cx
+    </td>
+    <td>
+      scdown x
+    </td>
+    <td>
+      Scroll the screen down x&nbsp;lines
+    </td>
+    <td>
+      Super only, not implemented
+    </td>
+  </tr>
+  <tr>
+    <td>
+      00E0
+    </td>
+    <td>
+      cls
+    </td>
+    <td>
+      Clear the screen
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      00EE
+    </td>
+    <td>
+      rts
+    </td>
+    <td>
+      return from subroutine call
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      00FB
+    </td>
+    <td>
+      scright
+    </td>
+    <td>
+      scroll screen 4 pixels right
+    </td>
+    <td>
+      Super only,not implemented
+    </td>
+  </tr>
+  <tr>
+    <td>
+      00FC
+    </td>
+    <td>
+      scleft
+    </td>
+    <td>
+      scroll screen&nbsp;4 pixels left
+    </td>
+    <td>
+      Super only,not implemented
+    </td>
+  </tr>
+  <tr>
+    <td>
+      00FE
+    </td>
+    <td>
+      low
+    </td>
+    <td>
+      disable extended screen mode
+    </td>
+    <td>
+      Super only
+    </td>
+  </tr>
+  <tr>
+    <td>
+      00FF
+    </td>
+    <td>
+      high
+    </td>
+    <td>
+      enable extended screen mode (128 x 64)
+    </td>
+    <td>
+      Super only&nbsp;
+    </td>
+  </tr>
+  <tr>
+    <td>
+      1xxx
+    </td>
+    <td>
+      jmp xxx
+    </td>
+    <td>
+      jump to address xxx
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      2xxx
+    </td>
+    <td>
+      jsr xxx
+    </td>
+    <td>
+      jump to subroutine at address xxx
+    </td>
+    <td>
+      16 levels maximum
+    </td>
+  </tr>
+  <tr>
+    <td>
+      3rxx
+    </td>
+    <td>
+      skeq vr,xx
+    </td>
+    <td>
+      skip if register r =&nbsp;constant
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      4rxx
+    </td>
+    <td>
+      skne vr,xx
+    </td>
+    <td>
+      skip if register r&nbsp;&lt;&gt; constant
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      5ry0
+    </td>
+    <td>
+      skeq vr,vy
+    </td>
+    <td>
+      skip f register r = register y
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      6rxx
+    </td>
+    <td>
+      mov vr,xx
+    </td>
+    <td>
+      move constant to register r
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      7rxx
+    </td>
+    <td>
+      add vr,vx
+    </td>
+    <td>
+      add constant to register r
+    </td>
+    <td>
+      No carry generated
+    </td>
+  </tr>
+  <tr>
+    <td>
+      8ry0
+    </td>
+    <td>
+      mov vr,vy
+    </td>
+    <td>
+      move register vy into vr
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      8ry1
+    </td>
+    <td>
+      or rx,ry
+    </td>
+    <td>
+      or register vy into register vx
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      8ry2
+    </td>
+    <td>
+      and rx,ry
+    </td>
+    <td>
+      and register vy into register vx
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      8ry3
+    </td>
+    <td>
+      xor rx,ry
+    </td>
+    <td>
+      exclusive or register ry into register rx
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      8ry4
+    </td>
+    <td>
+      add vr,vy
+    </td>
+    <td>
+      add register vy to vr,carry in&nbsp;vf
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      8ry5
+    </td>
+    <td>
+      sub vr,vy
+    </td>
+    <td>
+      subtract register vy from vr,borrow in&nbsp;vf
+    </td>
+    <td>
+      vf set to 1 if borroesws
+    </td>
+  </tr>
+  <tr>
+    <td>
+      8r06
+    </td>
+    <td>
+      shr vr
+    </td>
+    <td>
+      shift register vy right, bit 0 goes into&nbsp;register vf
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      8ry7
+    </td>
+    <td>
+      rsb vr,vy
+    </td>
+    <td>
+      subtract register vr from register vy, result in vr
+    </td>
+    <td>
+      vf set to 1 if borrows
+    </td>
+  </tr>
+  <tr>
+    <td>
+      8r0e
+    </td>
+    <td>
+      shl vr
+    </td>
+    <td>
+      shift register vr left,bit 7 goes into register&nbsp;vf
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      9ry0
+    </td>
+    <td>
+      skne rx,ry
+    </td>
+    <td>
+      skip if register rx &lt;&gt; register ry
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      axxx
+    </td>
+    <td>
+      mvi xxx
+    </td>
+    <td>
+      Load index register with constant xxx
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      bxxx
+    </td>
+    <td>
+      jmi&nbsp;xxx 
+    </td>
+    <td>
+      Jump to address xxx+register v0
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      crxx
+    </td>
+    <td>
+      rand vr,xxx &nbsp;&nbsp;
+    </td>
+    <td>
+      vr = random number less than or&nbsp;equal to xxx
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      drys
+    </td>
+    <td>
+      sprite rx,ry,s
+    </td>
+    <td>
+      Draw sprite at screen location rx,ry height s
+    </td>
+    <td>
+      Sprites stored in memory at location in index register, maximum 8&nbsp;bits
+      wide. Wraps around the screen. If when drawn, clears a pixel, vf is&nbsp;set
+      to 1 otherwise it is zero. All drawing is xor&nbsp;drawing (e.g. it toggles
+      the screen pixels
+    </td>
+  </tr>
+  <tr>
+    <td>
+      dry0
+    </td>
+    <td>
+      xsprite rx,ry
+    </td>
+    <td>
+      Draws extended sprite at screen location rx,ry
+    </td>
+    <td>
+      As above,but sprite is always 16 x&nbsp;16. Superchip only, not
+      yet&nbsp;implemented
+    </td>
+  </tr>
+  <tr>
+    <td>
+      ek9e
+    </td>
+    <td>
+      skpr k
+    </td>
+    <td>
+      skip if key (register rk) pressed
+    </td>
+    <td>
+      The key is a key number, see the chip-8 documentation
+    </td>
+  </tr>
+  <tr>
+    <td>
+      eka1
+    </td>
+    <td>
+      skup k
+    </td>
+    <td>
+      skip if key (register rk) not pressed
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      fr07
+    </td>
+    <td>
+      gdelay vr
+    </td>
+    <td>
+      get delay timer into&nbsp;vr
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      fr0a
+    </td>
+    <td>
+      key vr
+    </td>
+    <td>
+      wait for for keypress,put key in register vr
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      fr15
+    </td>
+    <td>
+      sdelay vr
+    </td>
+    <td>
+      set the delay timer to vr
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      fr18
+    </td>
+    <td>
+      ssound vr
+    </td>
+    <td>
+      set the sound timer to vr
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      fr1e
+    </td>
+    <td>
+      adi vr
+    </td>
+    <td>
+      add register vr to the index register
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      fr29
+    </td>
+    <td>
+      font vr
+    </td>
+    <td>
+      point I to the sprite for hexadecimal character in vr 
+    </td>
+    <td>
+      Sprite is 5 bytes high
+    </td>
+  </tr>
+  <tr>
+    <td>
+      fr30
+    </td>
+    <td>
+      xfont vr
+    </td>
+    <td>
+      point I to the sprite for hexadecimal character in vr
+    </td>
+    <td>
+      Sprite is 10 bytes high,Super only
+    </td>
+  </tr>
+  <tr>
+    <td>
+      fr33
+    </td>
+    <td>
+      bcd vr
+    </td>
+    <td>
+      store the bcd representation of register vr at location I,I+1,I+2
+    </td>
+    <td>
+      Doesn't change I
+    </td>
+  </tr>
+  <tr>
+    <td>
+      fr55
+    </td>
+    <td>
+      str v0-vr
+    </td>
+    <td>
+      store registers v0-vr at location I onwards
+    </td>
+    <td>
+      I&nbsp;is incremented to point to&nbsp;the next location on. e.g. I&nbsp;=
+      I + r + 1
+    </td>
+  </tr>
+  <tr>
+    <td>
+      fx65
+    </td>
+    <td>
+      ldr v0-vr
+    </td>
+    <td>
+      load registers v0-vr from location I onwards
+    </td>
+    <td>
+      as above.
+    </td>
+  </tr>
+</tbody></table>
+</p><p>
+  </p><hr>
+<p>
+<a href="http://members.aol.com/chip8/release/index.htm">Chip 8 Index Page</a>
+</p></body></html>
