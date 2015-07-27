@@ -6,9 +6,10 @@
 #include <curses.h>
 #include <signal.h>
 #include <unistd.h>
+#include <time.h>
 
 #define RAM_SIZE 0x1000
-#define STACK_SIZE 64
+#define STACK_SIZE 1024
 #define VIDEO_ROWS 32
 #define VIDEO_COLS 64
 #define FONT_ADDR  (0x200-(5*16))
@@ -52,10 +53,16 @@ uint16_t ram_read16(uint16_t addr)
     return swap16(*(uint16_t*)&ram[addr]);
 }
 
-uint16_t invalid_instruction(uint16_t instr)
+void c8_fault(void)
 {
     v8_quit();
-    fprintf(stderr, "invalid instruction: %04x. pc=%u\n", instr, regs.pc-1);
+    fprintf(stderr, "chip-8 fault:\n\n");
+}
+
+uint16_t invalid_instruction(uint16_t instr)
+{
+    c8_fault();
+    fprintf(stderr, "invalid instruction: %04x. pc=%u\n", instr, regs.pc-2);
     abort();
 }
 
@@ -98,17 +105,22 @@ void v8_init(void)
 
 void v8_clear(void)
 {
-    memset(vram, ' ', sizeof(vram));
+    memset(vram, 0, sizeof(vram));
 }
 
 void v8_swap(void)
 {
-    char str[VIDEO_COLS+1] = {0};
     move(0, 0);
     for (int row = 0; row < VIDEO_ROWS; ++row)
     {
-        memcpy(str, (char*)&vram[row * VIDEO_COLS], VIDEO_COLS);
-        printw("%s\n", str);
+        for (int col = 0; col < VIDEO_COLS; ++col)
+        {
+            if (vram[row * VIDEO_COLS + col])
+                printw("#");
+            else
+                printw(" ");
+        }
+        printw("\n");
     }
     refresh();
 //    usleep(16000);
@@ -116,19 +128,21 @@ void v8_swap(void)
 
 void v8_draw(uint8_t x, uint8_t y, uint8_t n)
 {
-    if (y >= VIDEO_ROWS || x >= VIDEO_COLS)
-        return;
+    x &= 0x3f;
+    y &= 0x1f;
 
     for (unsigned i = 0; i < n && y < VIDEO_ROWS; ++i)
     {
         uint8_t src  = ram[regs.i+i] >> 4;
         uint8_t *dst = &vram[y++ * VIDEO_COLS+x];
-        for (unsigned j = 0; j < 4; ++j)
+        for (unsigned j = 0; j < 4 && (x+j) < VIDEO_COLS; ++j)
         {
-            bool v = ((src >> j) & 1) ^ (dst[j] == '#');
-            if (v && dst[j] == ' ')
+            uint8_t bit = (src >> (3-j)) & 1;
+
+            if (!bit && dst[j])
                 regs.vf = 1;
-            dst[j] = " #"[v];
+
+            dst[j] ^= bit;
         }
     }
 }
@@ -141,6 +155,7 @@ uint8_t i8_getch(int test)
     {
         timeout(-1);
         key = getch();
+//        printf("\a");
         timeout(0);
     }
     else
@@ -157,7 +172,10 @@ uint8_t i8_getch(int test)
         key = (key - 'A') + 10;
 
     if (test >= 0 && key == test)
+    {
+//        printf("\a");
         key = 1;
+    }
 
     return key;
 }
@@ -192,6 +210,7 @@ void c8_step()
 
     move(33, 0);
     printw("instr: %04x pc: %04x\n", instr, regs.pc);
+
     switch (instr >> 12)
     {
     case 0x0: // these call host functions
@@ -220,6 +239,9 @@ void c8_step()
         break;
     case 0x2: // call nnn
         stack[regs.sp++] = regs.pc;
+        regs.pc = NNN(instr);
+        if (NNN(instr) == last_pc)
+            c8_halt();
         break;
     case 0x3: // se vx, kk
         if (N2V(instr, 2) == NN(instr))
@@ -341,7 +363,7 @@ void c8_step()
             regs.i = NNN(regs.i + N2V(instr, 2));
             break;
         case 0x29: // ld f, vx
-            regs.i = FONT_ADDR + N2V(instr, 2);
+            regs.i = FONT_ADDR + N2V(instr, 2) * 5;
             break;
         case 0x33: // ld b, vx
             ram[NNN(regs.i+0)] = N2V(instr, 2) / 100;
@@ -368,10 +390,13 @@ void c8_step()
 
     cycles++;
 
-    if (cycles % 29 == 0)
+    if (cycles % 2933 == 0)
     {
-        regs.dt--;
-        regs.st--;
+        if (regs.dt)
+            regs.dt--;
+
+        if (regs.st)
+            regs.st--;
     }
 
     printw("i:%04x sp:%04x dt:%04x st:%04x\n", regs.i, regs.sp, regs.dt, regs.st);
@@ -392,9 +417,13 @@ int main(int argc, char *argv[])
 
     clear();
     refresh();
+
+    struct timespec ts = {0, 1E9/1.76E6};
+
     while (1)
     {
         c8_step();
+        nanosleep(&ts, NULL);
     }
 
     v8_quit();
