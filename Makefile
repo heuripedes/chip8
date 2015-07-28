@@ -1,7 +1,7 @@
 
-all: test
-	gcc -Wall -std=gnu99 -g3 -o chip8 chip8.c -lcurses
+all:
+	gcc -Wall -std=gnu99 -g3 -o chip8 chip8.c main.c -lcursesw
 
-test: test.chp
+test: all test.chp
 	chipper test
 
