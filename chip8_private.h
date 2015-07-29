@@ -9,6 +9,23 @@
 #include "chip8.h"
 #endif
 
+typedef struct {
+    uint8_t op:4;
+    union {
+        struct {
+            uint8_t x:4;
+            union {
+                struct {
+                    uint8_t y:4;
+                    uint8_t n:4;
+                };
+                uint8_t kk;
+            };
+        };
+        uint16_t nnn:12;
+    };
+} chip8_instr_t;
+
 static inline void c8_push(chip8_t *c8)
 {
     if (c8->stack_ptr == CHIP8_STACK_SIZE)

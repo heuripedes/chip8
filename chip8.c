@@ -1,5 +1,6 @@
 #include "chip8_private.h"
 #include "chip8_naive.h"
+#include "chip8_ir.h"
 
 chip8_t *c8_new(void)
 {
@@ -74,6 +75,10 @@ void c8_run(chip8_t *c8, unsigned cycles)
 
     c8->cycles = cycles;
 
-    while (c8->cycles)
-        c8_naive_step(c8);
+    if (1)
+        while (c8->cycles)
+            c8_naive_step(c8);
+    else
+        while (c8->cycles)
+            c8_ir_step(c8);
 }
