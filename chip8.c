@@ -58,6 +58,7 @@ void c8_load(chip8_t *c8, uint8_t *data, size_t size)
         size = CHIP8_STACK_SIZE-512;
 
     memcpy(c8->ram+512, data, size);
+    c8ir_invalidate(c8, 0, 4096);
 }
 
 
