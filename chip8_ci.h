@@ -1,8 +1,8 @@
 #include "chip8_private.h"
 #include <stddef.h>
 
-#define c8ci_OP_ARGS uintptr_t d, uintptr_t a, uintptr_t b
-typedef void (*c8ci_op_t)(chip8_t *c8, c8ci_OP_ARGS);
+#define C8CI_OP_ARGS uintptr_t d, uintptr_t a, uintptr_t b
+typedef void (*c8ci_op_t)(chip8_t *c8, C8CI_OP_ARGS);
 typedef struct {
     c8ci_op_t op;
     uintptr_t d;
@@ -11,11 +11,11 @@ typedef struct {
 
 static c8ci_tac_t c8ci_cache[4096];
 
-#define c8ci_def_begin(name) static void c8ci_##name(chip8_t *c8, c8ci_OP_ARGS) { c8->pc += 2;
+#define c8ci_def_begin(name) static void c8ci_##name(chip8_t *c8, C8CI_OP_ARGS) { c8->pc += 2;
 #define c8ci_def_end(name) }
 
 
-static void c8ci_translate(chip8_t *c8, c8ci_OP_ARGS);
+static void c8ci_translate(chip8_t *c8, C8CI_OP_ARGS);
 static void c8ci_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
 {
     for (uint16_t i = begin; i < end; ++i)
@@ -192,7 +192,7 @@ c8ci_def_begin(ld_key)
         *(uint8_t*)d = result;
 c8ci_def_end()
 
-static void c8ci_translate(chip8_t *c8, c8ci_OP_ARGS)
+static void c8ci_translate(chip8_t *c8, C8CI_OP_ARGS)
 {
     c8ci_tac_t *tac      = &c8ci_cache[c8->pc];
     const uint16_t instr = c8->ram[c8->pc] << 8 | c8->ram[c8->pc + 1];
@@ -433,4 +433,14 @@ static void c8_ci_step(chip8_t *c8)
 
         c8->poll(c8->kbd, c8->poll_data);
     }
+}
+
+static void c8_ci_new(chip8_t *c8)
+{
+
+}
+
+static void c8_ci_free(chip8_t *c8)
+{
+
 }

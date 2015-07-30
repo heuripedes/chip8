@@ -35,7 +35,8 @@ typedef struct
     uint8_t   stack_ptr;
     uint16_t *stack;
 
-    void     *cache;
+    void     *dyn;
+    void     *ci;
 
     uint8_t kbd[16];
 

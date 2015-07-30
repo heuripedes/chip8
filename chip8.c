@@ -1,6 +1,7 @@
 #include "chip8_private.h"
 #include "chip8_naive.h"
 #include "chip8_ci.h"
+#include "chip8_dyn.h"
 
 chip8_t *c8_new(void)
 {
@@ -31,6 +32,9 @@ chip8_t *c8_new(void)
 
     memcpy(&c8->ram[CHIP8_FONT_ADDR], font, sizeof(font));
 
+    c8_ci_new(c8);
+    c8_dyn_new(c8);
+
     return c8;
 }
 
@@ -40,8 +44,8 @@ void c8_free(chip8_t *c8)
     free(c8->vram);
     free(c8->stack);
 
-    if (c8->cache)
-        free(c8->cache);
+    c8_ci_free(c8);
+    c8_dyn_free(c8);
 
     memset(c8, 0, sizeof(*c8));
     free(c8);
@@ -76,10 +80,19 @@ void c8_run(chip8_t *c8, unsigned cycles)
 
     c8->cycles = cycles;
 
-    if (0)
+    switch (2)
+    {
+    case 0:
         while (c8->cycles)
             c8_naive_step(c8);
-    else
+        break;
+    case 1:
         while (c8->cycles)
             c8_ci_step(c8);
+        break;
+    case 2:
+        while (c8->cycles)
+            c8_dyn_step(c8);
+        break;
+    }
 }
