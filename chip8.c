@@ -29,7 +29,7 @@ chip8_t *c8_new(void)
     c8->stack = (uint16_t*)calloc(1, CHIP8_STACK_SIZE * sizeof(uint16_t));
     c8->pc    = 512;
 
-    memcpy(c8->vram, font, sizeof(font));
+    memcpy(&c8->ram[CHIP8_FONT_ADDR], font, sizeof(font));
 
     return c8;
 }
