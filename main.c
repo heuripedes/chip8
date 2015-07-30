@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
             for (int col = 0; col < CHIP8_VIDEO_COLS; ++col)
             {
                 if (c8->vram[row * CHIP8_VIDEO_COLS + col])
-                    addwstr(L"█");
+                    printw("#");
                 else
                     printw(" ");
             }

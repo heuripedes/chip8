@@ -55,16 +55,16 @@ c8ir_def(pop,
 )
 
 c8ir_def(jp,
-    c8->pc = a;
+    c8_jump(c8, a);
 )
 
 c8ir_def(jp_nnn,
-    c8->pc = *(uint8_t*)a + b;
+    c8_jump(c8, *(uint8_t*)a + b);
 )
 
 c8ir_def(call,
     c8_push(c8);
-    c8->pc = a;
+    c8_jump(c8, a);
 )
 
 c8ir_def(se_kk,
