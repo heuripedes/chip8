@@ -10,35 +10,16 @@ typedef struct {
 
 
 
-static c8ir_tac_t c8ir_pool[4096];
-static c8ir_tac_t *c8ir_cache[4096];
-static const c8ir_tac_t *c8_ir_trans(chip8_t *c8);
+static c8ir_tac_t c8ir_cache[4096];
 
 #define c8ir_def(name, code) static void c8ir_##name(chip8_t *c8, C8IR_OP_ARGS) { c8->pc += 2; code; }
 
-static void c8_ir_step(chip8_t *c8)
+static void c8ir_translate(chip8_t *c8, C8IR_OP_ARGS);
+static void c8ir_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
 {
-    while (c8->cycles)
+    for (uint16_t i = begin; i < end; ++i)
     {
-        const c8ir_tac_t *tac = c8ir_cache[c8->pc];
-        if (!tac)
-            tac = c8_ir_trans(c8);
-
-        tac->op(c8, tac->d, tac->a, tac->b);
-
-        c8->run_time++;
-        c8->cycles--;
-
-        if ((c8->run_time % (CHIP8_CLOCK/60)) == 0)
-        {
-            if (c8->dt)
-                c8->dt--;
-
-            if (c8->st)
-                c8->st--;
-        }
-
-        c8->poll(c8->kbd, c8->poll_data);
+        (&c8ir_cache[i])->op = c8ir_translate;
     }
 }
 
@@ -112,16 +93,13 @@ c8ir_def(ld_bcd,
     c8->ram[(c8->i+1) & 0xfff] = v / 10 % 10;
     c8->ram[(c8->i+2) & 0xfff] = v % 10;
 
-    c8ir_cache[(c8->i+0) & 0xfff] = NULL;
-    c8ir_cache[(c8->i+1) & 0xfff] = NULL;
-    c8ir_cache[(c8->i+2) & 0xfff] = NULL;
+    c8ir_invalidate(c8, c8->i, c8->i+2);
 )
 
 c8ir_def(ld_r2m,
     uint8_t x = (uint8_t*)a - c8->v;
 
-    memset(&c8ir_cache[c8->i], 0, sizeof(c8ir_op_t) * x + 1);
-
+    c8ir_invalidate(c8, c8->i, x+1);
     memcpy(&c8->ram[c8->i], (uint8_t*)a, x+1);
     c8->i = c8->i+x+1;
 )
@@ -205,9 +183,9 @@ c8ir_def(ld_key,
         *(uint8_t*)d = result;
 )
 
-static const c8ir_tac_t *c8_ir_trans(chip8_t *c8)
+static void c8ir_translate(chip8_t *c8, C8IR_OP_ARGS)
 {
-    c8ir_tac_t *tac      = &c8ir_pool[c8->pc];
+    c8ir_tac_t *tac      = &c8ir_cache[c8->pc];
     const uint16_t instr = c8->ram[c8->pc] << 8 | c8->ram[c8->pc + 1];
     const uint8_t x    = (instr >> 8) & 0x0f;
     const uint8_t y    = (instr >> 4) & 0xf;
@@ -421,7 +399,29 @@ static const c8ir_tac_t *c8_ir_trans(chip8_t *c8)
         break;
     }
 
-    return c8ir_cache[c8->pc] = tac;
+    tac->op(c8, tac->d, tac->a, tac->b);
 }
 
 
+static void c8_ir_step(chip8_t *c8)
+{
+    while (c8->cycles)
+    {
+        const c8ir_tac_t *tac = &c8ir_cache[c8->pc];
+        tac->op(c8, tac->d, tac->a, tac->b);
+
+        c8->run_time++;
+        c8->cycles--;
+
+        if ((c8->run_time % (CHIP8_CLOCK/60)) == 0)
+        {
+            if (c8->dt)
+                c8->dt--;
+
+            if (c8->st)
+                c8->st--;
+        }
+
+        c8->poll(c8->kbd, c8->poll_data);
+    }
+}
