@@ -1,4 +1,5 @@
 #include "chip8_private.h"
+#include <stddef.h>
 
 #define C8IR_OP_ARGS uintptr_t d, uintptr_t a, uintptr_t b
 typedef void (*c8ir_op_t)(chip8_t *c8, C8IR_OP_ARGS);
@@ -12,7 +13,9 @@ typedef struct {
 
 static c8ir_tac_t c8ir_cache[4096];
 
-#define c8ir_def(name, code) static void c8ir_##name(chip8_t *c8, C8IR_OP_ARGS) { c8->pc += 2; code; }
+#define c8ir_def_begin(name) static void c8ir_##name(chip8_t *c8, C8IR_OP_ARGS) { c8->pc += 2;
+#define c8ir_def_end(name) }
+
 
 static void c8ir_translate(chip8_t *c8, C8IR_OP_ARGS);
 static void c8ir_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
@@ -23,108 +26,109 @@ static void c8ir_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
     }
 }
 
-c8ir_def(illegal,
+c8ir_def_begin(illegal)
     c8->state |= CHIP8_STATE_ILEGAL;
-)
+c8ir_def_end()
 
-c8ir_def(cls,
+c8ir_def_begin(cls)
     memset(c8->vram, 0, CHIP8_VIDEO_ROWS * CHIP8_VIDEO_COLS);
-)
+c8ir_def_end()
 
-c8ir_def(pop,
+c8ir_def_begin(pop)
     c8_pop(c8);
-)
+c8ir_def_end()
 
-c8ir_def(jp,
+c8ir_def_begin(jp)
     c8_jump(c8, a);
-)
+c8ir_def_end()
 
-c8ir_def(jp_nnn,
+c8ir_def_begin(jp_nnn)
     c8_jump(c8, *(uint8_t*)a + b);
-)
+c8ir_def_end()
 
-c8ir_def(call,
+c8ir_def_begin(call)
     c8_push(c8);
     c8_jump(c8, a);
-)
+c8ir_def_end()
 
-c8ir_def(se_kk,
+c8ir_def_begin(se_kk)
     if (*(uint8_t*)a == b)
         c8->pc += 2;
-)
+c8ir_def_end()
 
-c8ir_def(sne_kk,
+c8ir_def_begin(sne_kk)
     if (*(uint8_t*)a != b)
         c8->pc += 2;
-)
+c8ir_def_end()
 
-c8ir_def(se,
+c8ir_def_begin(se)
     uint8_t *vx = (uint8_t*)a;
     uint8_t *vy = (uint8_t*)b;
     if (*vx == *vy)
         c8->pc += 2;
-)
+c8ir_def_end()
 
-c8ir_def(sne,
+c8ir_def_begin(sne)
     uint8_t *vx = (uint8_t*)a;
     uint8_t *vy = (uint8_t*)b;
     if (*vx != *vy)
         c8->pc += 2;
-)
+c8ir_def_end()
 
-c8ir_def(ld_kk,
+c8ir_def_begin(ld_kk)
     if ((uintptr_t)&c8->i == d)
         *(uint16_t*)d = a;
     else
         *(uint8_t*)d = a;
-)
+c8ir_def_end()
 
-c8ir_def(ld,
+c8ir_def_begin(ld)
     *(uint8_t*)d = *(uint8_t*)a;
-)
+c8ir_def_end()
 
-c8ir_def(ld_f,
+c8ir_def_begin(ld_f)
     *(uint16_t*)d = CHIP8_FONT_ADDR + *(uint8_t*)a * 5;
-)
+c8ir_def_end()
 
-c8ir_def(ld_bcd,
+c8ir_def_begin(ld_bcd)
     uint8_t v = *(uint8_t*)a;
     c8->ram[(c8->i+0) & 0xfff] = v / 100;
     c8->ram[(c8->i+1) & 0xfff] = v / 10 % 10;
     c8->ram[(c8->i+2) & 0xfff] = v % 10;
 
     c8ir_invalidate(c8, c8->i, c8->i+2);
-)
+c8ir_def_end()
 
-c8ir_def(ld_r2m,
-    uint8_t x = (uint8_t*)a - c8->v;
-
+c8ir_def_begin(ld_r2m)
+    ptrdiff_t x = a - (uintptr_t)c8->v;
     c8ir_invalidate(c8, c8->i, x+1);
-    memcpy(&c8->ram[c8->i], (uint8_t*)a, x+1);
+    memcpy(&c8->ram[c8->i], c8->v, x+1);
     c8->i = c8->i+x+1;
-)
+c8ir_def_end()
 
-c8ir_def(ld_m2r,
-    uint8_t x = (uint8_t*)a - c8->v;
-    memcpy((uint8_t*)a, &c8->ram[c8->i], x+1);
+c8ir_def_begin(ld_m2r)
+    ptrdiff_t x = a - (uintptr_t)c8->v;
+    memcpy(c8->v, &c8->ram[c8->i], x+1);
     c8->i = c8->i+x+1;
-)
+c8ir_def_end()
 
-c8ir_def(add_kk,
+c8ir_def_begin(add_kk)
     *(uint8_t*)d = *(uint8_t*)a + b;
-)
+c8ir_def_end()
 
-c8ir_def(or,
+c8ir_def_begin(or)
     *(uint8_t*)d = *(uint8_t*)a | *(uint8_t*)b;
-)
-c8ir_def(and,
-    *(uint8_t*)d = *(uint8_t*)a & *(uint8_t*)b;
-)
-c8ir_def(xor,
-    *(uint8_t*)d = *(uint8_t*)a ^ *(uint8_t*)b;
-)
+c8ir_def_end()
 
-c8ir_def(add,
+c8ir_def_begin(and)
+    *(uint8_t*)d = *(uint8_t*)a & *(uint8_t*)b;
+c8ir_def_end()
+
+c8ir_def_begin(xor)
+    *(uint8_t*)d = *(uint8_t*)a ^ *(uint8_t*)b;
+c8ir_def_end()
+
+c8ir_def_begin(add)
     if ((uintptr_t)&c8->i == a)
         *(uint16_t*)d = *(uint16_t*)a + *(uint8_t*)b;
     else
@@ -132,40 +136,47 @@ c8ir_def(add,
         c8->v[15] = ((uint32_t)*(uint8_t*)a + (uint32_t)*(uint8_t*)b) > 0xff;
         *(uint8_t*)d = *(uint8_t*)a + *(uint8_t*)b;
     }
-)
+c8ir_def_end()
 
-c8ir_def(sub,
+c8ir_def_begin(sub)
+
     c8->v[15] = *(uint8_t*)a > *(uint8_t*)a;
     *(uint8_t*)d = *(uint8_t*)a - *(uint8_t*)b;
-)
+c8ir_def_end()
 
-c8ir_def(shr,
+c8ir_def_begin(shr)
+
     c8->v[15] = *(uint8_t*)a & 1;
     *(uint8_t*)d = *(uint8_t*)a >> 1;
-)
+c8ir_def_end()
 
-c8ir_def(shl,
+c8ir_def_begin(shl)
+
     c8->v[15] = *(uint8_t*)a >> 7;
     *(uint8_t*)d = *(uint8_t*)a << 1;
-)
+c8ir_def_end()
 
-c8ir_def(rnd,
+c8ir_def_begin(rnd)
+
     *(uint8_t*)d = rand() & a;
-)
+c8ir_def_end()
 
-c8ir_def(drw,
+c8ir_def_begin(drw)
+
     c8_draw(c8, *(uint8_t*)d, *(uint8_t*)a, b);
-)
+c8ir_def_end()
 
-c8ir_def(skp,
+c8ir_def_begin(skp)
+
     c8->pc += c8->kbd[*(uint8_t*)a] * 2;
-)
+c8ir_def_end()
 
-c8ir_def(sknp,
+c8ir_def_begin(sknp)
+
     c8->pc += (!c8->kbd[*(uint8_t*)a]) * 2;
-)
+c8ir_def_end()
 
-c8ir_def(ld_key,
+c8ir_def_begin(ld_key)
     uint8_t result = 255;
 
     for (int i = 0; i < 16; ++i)
@@ -181,7 +192,7 @@ c8ir_def(ld_key,
         c8->pc -= 2;
     else
         *(uint8_t*)d = result;
-)
+c8ir_def_end()
 
 static void c8ir_translate(chip8_t *c8, C8IR_OP_ARGS)
 {

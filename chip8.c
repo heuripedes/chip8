@@ -76,7 +76,7 @@ void c8_run(chip8_t *c8, unsigned cycles)
 
     c8->cycles = cycles;
 
-    if (1)
+    if (0)
         while (c8->cycles)
             c8_naive_step(c8);
     else
