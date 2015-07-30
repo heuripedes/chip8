@@ -1,6 +1,6 @@
 #include "chip8_private.h"
 #include "chip8_naive.h"
-#include "chip8_ir.h"
+#include "chip8_ci.h"
 
 chip8_t *c8_new(void)
 {
@@ -58,7 +58,7 @@ void c8_load(chip8_t *c8, uint8_t *data, size_t size)
         size = CHIP8_STACK_SIZE-512;
 
     memcpy(c8->ram+512, data, size);
-    c8ir_invalidate(c8, 0, 4096);
+    c8ci_invalidate(c8, 0, 4096);
 }
 
 
@@ -81,5 +81,5 @@ void c8_run(chip8_t *c8, unsigned cycles)
             c8_naive_step(c8);
     else
         while (c8->cycles)
-            c8_ir_step(c8);
+            c8_ci_step(c8);
 }

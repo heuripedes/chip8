@@ -7,7 +7,7 @@ CFLAGS=-Wall -std=gnu99 -g3 -O0 -DSLJIT_CONFIG_AUTO
 all: $(OBJECTS)
 	$(CC) -o chip8 $(OBJECTS) -lcursesw
 
-chip8.o: chip8_naive.h chip8_ir.h
+chip8.o: chip8_naive.h chip8_ci.h
 
 $(OBJECTS): Makefile
 
