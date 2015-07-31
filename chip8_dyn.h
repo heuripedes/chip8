@@ -286,23 +286,16 @@ static c8dyn_op_t c8dyn_emit_cond_kk(chip8_t *c8, c8dyn_t *dyn, bool equal, uint
 
     if (x > CHIP8_LAST_V_REG)
     {
-        fprintf(stderr, "%s invalid register %1x\n", (equal ? "se_kk" : "sne_kk"), x);
+        fprintf(stderr, "%s: invalid register %1x\n", (equal ? "se_kk" : "sne_kk"), x);
         exit(1);
     }
 
     struct sljit_jump *dont_skip;
 
-    if (equal) // equal == SLJIT_NOT_EQUAL
-    {
-        // if (S0->v[x] != kk) return; else S0->pc += 2;
-        dont_skip = sljit_emit_cmp(dyn->c, SLJIT_NOT_EQUAL, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_IMM, kk);
-    }
-    else // !equal == SLJIT_EQUAL
-    {
-        // if (S0->v[x] == kk) return; else S0->pc += 2;
-        dont_skip = sljit_emit_cmp(dyn->c, SLJIT_EQUAL, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_IMM, kk);
-    }
+    // because of early return, equal == SLJIT_NOT_EQUAL, !equal == SLJIT_EQUAL
+    sljit_si type = (equal ? SLJIT_NOT_EQUAL : SLJIT_EQUAL);
 
+    dont_skip = sljit_emit_cmp(dyn->c, type, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_IMM, kk);
     sljit_emit_op2(dyn->c, SLJIT_ADD, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, pc), SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, pc), SLJIT_IMM, 2);
 
     sljit_set_label(dont_skip, sljit_emit_label(dyn->c));
@@ -317,23 +310,16 @@ static c8dyn_op_t c8dyn_emit_cond(chip8_t *c8, c8dyn_t *dyn, bool equal, uint8_t
 
     if (x > CHIP8_LAST_V_REG || y > CHIP8_LAST_V_REG)
     {
-        fprintf(stderr, "%s invalid registers %1x %1x\n", (equal ? "se" : "sne"), x, y);
+        fprintf(stderr, "%s: invalid registers %1x %1x\n", (equal ? "se" : "sne"), x, y);
         exit(1);
     }
 
     struct sljit_jump *dont_skip;
 
-    if (equal) // equal == SLJIT_NOT_EQUAL
-    {
-        // if (S0->v[x] != S0->v[y]) return; else S0->pc += 2;
-        dont_skip = sljit_emit_cmp(dyn->c, SLJIT_NOT_EQUAL, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + y);
-    }
-    else // !equal == SLJIT_EQUAL
-    {
-        // if (S0->v[x] == S0->v[y]) return; else S0->pc += 2;
-        dont_skip = sljit_emit_cmp(dyn->c, SLJIT_EQUAL, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + y);
-    }
+    // because of early return, equal == SLJIT_NOT_EQUAL, !equal == SLJIT_EQUAL
+    sljit_si type = (equal ? SLJIT_NOT_EQUAL : SLJIT_EQUAL);
 
+    dont_skip = sljit_emit_cmp(dyn->c, type, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + y);
     sljit_emit_op2(dyn->c, SLJIT_ADD, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, pc), SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, pc), SLJIT_IMM, 2);
 
     sljit_set_label(dont_skip, sljit_emit_label(dyn->c));
@@ -342,7 +328,7 @@ static c8dyn_op_t c8dyn_emit_cond(chip8_t *c8, c8dyn_t *dyn, bool equal, uint8_t
     return (c8dyn_op_t)sljit_generate_code(dyn->c);
 }
 
-static c8dyn_op_t c8dyn_emit_load_imm(chip8_t *c8, c8dyn_t *dyn, uint16_t x, uint16_t imm)
+static c8dyn_op_t c8dyn_emit_load_imm(chip8_t *c8, c8dyn_t *dyn, uint8_t x, uint16_t imm)
 {
     sljit_emit_enter(dyn->c, 0, 1, 0, 1, 0, 0, 0);
 
@@ -362,9 +348,9 @@ static c8dyn_op_t c8dyn_emit_load_imm(chip8_t *c8, c8dyn_t *dyn, uint16_t x, uin
     return (c8dyn_op_t)sljit_generate_code(dyn->c);
 }
 
-static c8dyn_op_t c8dyn_emit_add_imm(chip8_t *c8, c8dyn_t *dyn, uint16_t x, uint16_t imm)
+static c8dyn_op_t c8dyn_emit_add_imm(chip8_t *c8, c8dyn_t *dyn, uint8_t x, uint16_t imm)
 {
-    sljit_emit_enter(dyn->c, 0, 1, 1, 1, 0, 0, 0);
+    sljit_emit_enter(dyn->c, 0, 1, 0, 1, 0, 0, 0);
 
     if (x < CHIP8_NUM_V_REGS) // S0->v[x] += kk
         sljit_emit_op2(dyn->c, SLJIT_ADD, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_IMM, imm & 0xff);
