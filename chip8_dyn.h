@@ -463,6 +463,69 @@ invalid:
     exit(1);
 }
 
+static c8dyn_op_t c8dyn_emit_bwop(chip8_t *c8, c8dyn_t *dyn, char type, uint8_t x, uint8_t y)
+{
+    sljit_si  src, srcw, dst, dstw, op;
+
+    src = dst = SLJIT_MEM1(SLJIT_S0);
+
+    if (x < CHIP8_NUM_V_REGS)
+        dstw = SLJIT_OFFSETOF(chip8_t, v) + x;
+    else
+        goto invalid;
+
+    if (y < CHIP8_NUM_V_REGS)
+        srcw = SLJIT_OFFSETOF(chip8_t, v) + y;
+    else
+        goto invalid;
+
+    switch (type)
+    {
+    case '&': op = SLJIT_AND; break;
+    case '|': op = SLJIT_OR; break;
+    case '^': op = SLJIT_XOR; break;
+    case '<': op = SLJIT_SHL; break;
+    case '>': op = SLJIT_LSHR; break;
+    default:
+        fprintf(stderr, "bwop: invalid operation %c\n", type);
+        exit(1);
+    }
+
+    sljit_emit_enter(dyn->c, 0, 1, 2, 1, 0, 0, 0);
+
+    if (type == '>' || type == '<')
+    {
+        sljit_emit_op1(dyn->c, SLJIT_IMOV_UB, SLJIT_R0, 0, dst, dstw);
+
+        if (type == '>') // R1 &= 1
+            sljit_emit_op2(dyn->c, SLJIT_AND, SLJIT_R1, 0, SLJIT_R0, 0, SLJIT_IMM, 1);
+        else // R1 >>= 7
+            sljit_emit_op2(dyn->c, SLJIT_LSHR, SLJIT_R1, 0, SLJIT_R0, 0, SLJIT_IMM, 7);
+
+        // vf = R1
+        sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + 15, SLJIT_R1, 0);
+
+        // R0 = R0 op 1
+        sljit_emit_op2(dyn->c, op, SLJIT_R0, 0, SLJIT_R0, 0, SLJIT_IMM, 1);
+    }
+    else
+    {
+        sljit_emit_op1(dyn->c, SLJIT_IMOV_UB, SLJIT_R0, 0, dst, dstw);
+        sljit_emit_op1(dyn->c, SLJIT_IMOV_UB, SLJIT_R1, 0, src, srcw);
+        sljit_emit_op2(dyn->c, op, SLJIT_R0, 0, SLJIT_R0, 0, SLJIT_R1, 0);
+    }
+
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, dst, dstw, SLJIT_R0, 0);
+
+    sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
+    return (c8dyn_op_t)sljit_generate_code(dyn->c);
+
+invalid:
+    fprintf(stderr, "bwop (%c): invalid register combination %1x %1x\n", type, x, y);
+    exit(1);
+}
+
+
 static c8dyn_op_t c8dyn_translate(chip8_t *c8)
 {
     c8dyn_t   *dyn = (c8dyn_t*)c8->dyn;
@@ -521,24 +584,15 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
         case 0x0: // ld
             *fn = c8dyn_emit_load(c8, dyn, x, y);
             break;
-//        case 0x1: // or
-//            tac->op = c8dyn_or;
-//            tac->d  = (uintptr_t)vx;
-//            tac->a  = (uintptr_t)vx;
-//            tac->b  = (uintptr_t)vy;
-//            break;
-//        case 0x2: // and
-//            tac->op = c8dyn_and;
-//            tac->d  = (uintptr_t)vx;
-//            tac->a  = (uintptr_t)vx;
-//            tac->b  = (uintptr_t)vy;
-//            break;
-//        case 0x3: // xor
-//            tac->op = c8dyn_xor;
-//            tac->d  = (uintptr_t)vx;
-//            tac->a  = (uintptr_t)vx;
-//            tac->b  = (uintptr_t)vy;
-//            break;
+        case 0x1: // or
+            *fn = c8dyn_emit_bwop(c8, dyn, '|', x, y);
+            break;
+        case 0x2: // and
+            *fn = c8dyn_emit_bwop(c8, dyn, '&', x, y);
+            break;
+        case 0x3: // xor
+            *fn = c8dyn_emit_bwop(c8, dyn, '^', x, y);
+            break;
         case 0x4: // add
             *fn = c8dyn_emit_add(c8, dyn, x, y);
             break;
@@ -548,24 +602,18 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
 //            tac->a  = (uintptr_t)vx;
 //            tac->b  = (uintptr_t)vy;
 //            break;
-//        case 0x6: // shr
-//            // XXX: doc says vx = vy >> 1, vf = vy &1
-//            tac->op = c8dyn_shr;
-//            tac->d  = (uintptr_t)vx;
-//            tac->a  = (uintptr_t)vx;
-//            break;
+        case 0x6: // shr
+            *fn = c8dyn_emit_bwop(c8, dyn, '>', x, x);
+            break;
 //        case 0x7: // subn
 //            tac->op = c8dyn_sub;
 //            tac->d  = (uintptr_t)vx;
 //            tac->a  = (uintptr_t)vy;
 //            tac->b  = (uintptr_t)vx;
 //            break;
-//        case 0xe: // shl
-//            // XXX: doc says vx = vy << 1, vf = vy >> 7
-//            tac->op = c8dyn_shl;
-//            tac->d  = (uintptr_t)vx;
-//            tac->a  = (uintptr_t)vx;
-//            break;
+        case 0xe: // shl
+            *fn = c8dyn_emit_bwop(c8, dyn, '<', x, x);
+            break;
         }
         break;
     }
