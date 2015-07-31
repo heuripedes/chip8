@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
     c8_load(c8, data, size);
     c8_set_poll(c8, kbd_poll, 0);
 
-    while (1)
+    while (!(c8->state & CHIP8_STATE_HALT))
     {
         c8_run(c8, 100);
 

@@ -51,6 +51,8 @@ enum {
     CHIP8_PC,
     CHIP8_ST,
     CHIP8_DT,
+
+    CHIP8_LAST_REG = CHIP8_DT
 };
 
 static inline void c8_push(chip8_t *c8)
