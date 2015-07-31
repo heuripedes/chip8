@@ -4,6 +4,11 @@
 #include <assert.h>
 #include "sljit/sljitLir.h"
 
+/*
+ * This is a really ineffective dynarec. Every Chip-8 instruction gets compiled
+ * to a native function.
+ */
+
 typedef void (*c8dyn_op_t)(chip8_t *c8);
 
 typedef struct {
@@ -441,6 +446,62 @@ invalid:
     exit(1);
 }
 
+static c8dyn_op_t c8dyn_emit_sub(chip8_t *c8, c8dyn_t *dyn, bool swap_x_y, uint8_t x, uint8_t y)
+{
+    sljit_si  src, srcw, dst, dstw;
+
+    src = dst = SLJIT_MEM1(SLJIT_S0);
+
+    if (x < CHIP8_NUM_V_REGS)
+        dstw  = SLJIT_OFFSETOF(chip8_t, v) + x;
+    else
+        goto invalid;
+
+    if (y < CHIP8_NUM_V_REGS)
+        srcw = SLJIT_OFFSETOF(chip8_t, v) + y;
+    else
+        goto invalid;
+
+    sljit_emit_enter(dyn->c, 0, 1, 2, 1, 0, 0, 0);
+
+    struct sljit_jump *set_zero;
+    struct sljit_jump *keep_going;
+
+    // R0 = S0->v[x]; R1 = S0->v[y]
+    if (swap_x_y)
+    {
+        sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R0, 0, src, srcw);
+        sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R1, 0, dst, dstw);
+    }
+    else
+    {
+        sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R0, 0, dst, dstw);
+        sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R1, 0, src, srcw);
+    }
+
+    // if (r0 < r1) S0->v[15] = 0; else S0->v[15] = 1;
+    set_zero = sljit_emit_cmp(dyn->c, SLJIT_LESS, SLJIT_R0, 0, SLJIT_R1, 0);
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + 15, SLJIT_IMM, 1);
+    keep_going = sljit_emit_jump(dyn->c, SLJIT_JUMP);
+    sljit_set_label(set_zero, sljit_emit_label(dyn->c));
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + 15, SLJIT_IMM, 0);
+    sljit_set_label(keep_going, sljit_emit_label(dyn->c));
+
+    // R0 = R0 - R1
+    sljit_emit_op2(dyn->c, SLJIT_SUB, SLJIT_R0, 0, SLJIT_R0, 0, SLJIT_R1, 0);
+
+    // *x = R0
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, dst, dstw, SLJIT_R0, 0);
+
+    sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
+
+    return (c8dyn_op_t)sljit_generate_code(dyn->c);
+
+invalid:
+    fprintf(stderr, "add: invalid register combination %1x %1x\n", x, y);
+    exit(1);
+}
+
 
 static c8dyn_op_t c8dyn_translate(chip8_t *c8)
 {
@@ -512,21 +573,15 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
         case 0x4: // add
             *fn = c8dyn_emit_add(c8, dyn, x, y);
             break;
-//        case 0x5: // sub
-//            tac->op = c8dyn_sub;
-//            tac->d  = (uintptr_t)vx;
-//            tac->a  = (uintptr_t)vx;
-//            tac->b  = (uintptr_t)vy;
-//            break;
+        case 0x5: // sub
+            *fn = c8dyn_emit_sub(c8, dyn, false, x, y);
+            break;
         case 0x6: // shr
             *fn = c8dyn_emit_bwop(c8, dyn, '>', x, x);
             break;
-//        case 0x7: // subn
-//            tac->op = c8dyn_sub;
-//            tac->d  = (uintptr_t)vx;
-//            tac->a  = (uintptr_t)vy;
-//            tac->b  = (uintptr_t)vx;
-//            break;
+        case 0x7: // subn
+            *fn = c8dyn_emit_sub(c8, dyn, true, x, y);
+            break;
         case 0xe: // shl
             *fn = c8dyn_emit_bwop(c8, dyn, '<', x, x);
             break;
