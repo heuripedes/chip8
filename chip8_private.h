@@ -26,6 +26,33 @@ typedef struct {
     };
 } chip8_instr_t;
 
+enum {
+    CHIP8_V0,
+    CHIP8_V1,
+    CHIP8_V2,
+    CHIP8_V3,
+    CHIP8_V4,
+    CHIP8_V5,
+    CHIP8_V6,
+    CHIP8_V7,
+    CHIP8_V8,
+    CHIP8_V9,
+    CHIP8_VA,
+    CHIP8_VB,
+    CHIP8_VC,
+    CHIP8_VD,
+    CHIP8_VE,
+    CHIP8_VF,
+
+    CHIP8_LAST_V_REG = CHIP8_VF,
+    CHIP8_NUM_V_REGS,
+
+    CHIP8_I,
+    CHIP8_PC,
+    CHIP8_ST,
+    CHIP8_DT,
+};
+
 static inline void c8_push(chip8_t *c8)
 {
     if (c8->stack_ptr == CHIP8_STACK_SIZE)

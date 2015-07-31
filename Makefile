@@ -1,6 +1,6 @@
 
 OBJECTS=chip8.o main.o sljit/sljitLir.o
-CFLAGS=-Wall -std=gnu99 -g3 -O0 -DSLJIT_CONFIG_AUTO
+CFLAGS=-Wall -std=gnu99 -g3 -O0 -DSLJIT_CONFIG_AUTO=1
 
 .PHONY: all
 
