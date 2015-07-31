@@ -86,5 +86,10 @@ static inline void c8_draw(chip8_t *c8, uint8_t x, uint8_t y, uint8_t nrows)
     }
 }
 
+static inline void c8_clear(chip8_t *c8)
+{
+    memset(c8->vram, 0, CHIP8_VIDEO_ROWS*CHIP8_VIDEO_COLS);
+}
+
 #endif // CHIP8_PRIVATE_H
 
