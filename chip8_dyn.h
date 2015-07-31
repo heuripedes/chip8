@@ -32,62 +32,6 @@ static void c8dyn_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
 //    c8->state |= CHIP8_STATE_ILEGAL;
 //c8dyn_def_end()
 
-//c8dyn_def_begin(cls)
-//    memset(c8->vram, 0, CHIP8_VIDEO_ROWS * CHIP8_VIDEO_COLS);
-//c8dyn_def_end()
-
-//c8dyn_def_begin(pop)
-//    c8_pop(c8);
-//c8dyn_def_end()
-
-//c8dyn_def_begin(jp)
-//    c8_jump(c8, a);
-//c8dyn_def_end()
-
-//c8dyn_def_begin(jp_nnn)
-//    c8_jump(c8, *(uint8_t*)a + b);
-//c8dyn_def_end()
-
-//c8dyn_def_begin(call)
-//    c8_push(c8);
-//    c8_jump(c8, a);
-//c8dyn_def_end()
-
-//c8dyn_def_begin(se_kk)
-//    if (*(uint8_t*)a == b)
-//        c8->pc += 2;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(sne_kk)
-//    if (*(uint8_t*)a != b)
-//        c8->pc += 2;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(se)
-//    uint8_t *vx = (uint8_t*)a;
-//    uint8_t *vy = (uint8_t*)b;
-//    if (*vx == *vy)
-//        c8->pc += 2;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(sne)
-//    uint8_t *vx = (uint8_t*)a;
-//    uint8_t *vy = (uint8_t*)b;
-//    if (*vx != *vy)
-//        c8->pc += 2;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(ld_kk)
-//    if ((uintptr_t)&c8->i == d)
-//        *(uint16_t*)d = a;
-//    else
-//        *(uint8_t*)d = a;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(ld)
-//    *(uint8_t*)d = *(uint8_t*)a;
-//c8dyn_def_end()
-
 //c8dyn_def_begin(ld_f)
 //    *(uint16_t*)d = CHIP8_FONT_ADDR + *(uint8_t*)a * 5;
 //c8dyn_def_end()
@@ -114,22 +58,6 @@ static void c8dyn_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
 //    c8->i = c8->i+x+1;
 //c8dyn_def_end()
 
-//c8dyn_def_begin(add_kk)
-//    *(uint8_t*)d = *(uint8_t*)a + b;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(or)
-//    *(uint8_t*)d = *(uint8_t*)a | *(uint8_t*)b;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(and)
-//    *(uint8_t*)d = *(uint8_t*)a & *(uint8_t*)b;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(xor)
-//    *(uint8_t*)d = *(uint8_t*)a ^ *(uint8_t*)b;
-//c8dyn_def_end()
-
 //c8dyn_def_begin(add)
 //    if ((uintptr_t)&c8->i == a)
 //        *(uint16_t*)d = *(uint16_t*)a + *(uint8_t*)b;
@@ -144,18 +72,6 @@ static void c8dyn_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
 
 //    c8->v[15] = *(uint8_t*)a > *(uint8_t*)a;
 //    *(uint8_t*)d = *(uint8_t*)a - *(uint8_t*)b;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(shr)
-
-//    c8->v[15] = *(uint8_t*)a & 1;
-//    *(uint8_t*)d = *(uint8_t*)a >> 1;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(shl)
-
-//    c8->v[15] = *(uint8_t*)a >> 7;
-//    *(uint8_t*)d = *(uint8_t*)a << 1;
 //c8dyn_def_end()
 
 //c8dyn_def_begin(rnd)
