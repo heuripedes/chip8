@@ -64,6 +64,7 @@ int main(int argc, char *argv[])
 
     while (1)
     {
+        move(CHIP8_VIDEO_ROWS+1, 0);
         c8_run(c8, 0);
 
         move(0, 0);

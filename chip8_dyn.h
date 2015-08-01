@@ -502,6 +502,42 @@ invalid:
     exit(1);
 }
 
+static c8dyn_op_t c8dyn_emit_draw(chip8_t *c8, c8dyn_t *dyn, uint8_t x, uint8_t y, uint8_t height)
+{
+    sljit_emit_enter(dyn->c, 0, 1, 4, 1, 0, 0, 0);
+
+    sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x);
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + y);
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R3, 0, SLJIT_IMM, height);
+    sljit_emit_ijump(dyn->c, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8_draw));
+
+    sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
+
+    return (c8dyn_op_t)sljit_generate_code(dyn->c);
+}
+
+static c8dyn_op_t c8dyn_emit_load_f(chip8_t *c8, c8dyn_t *dyn, uint8_t x)
+{
+    sljit_emit_enter(dyn->c, 0, 1, 2, 1, 0, 0, 0);
+
+
+    // r0 = f
+    sljit_emit_op1(dyn->c, SLJIT_IMOV_UH, SLJIT_R0, 0, SLJIT_IMM, CHIP8_FONT_ADDR);
+
+    // r1 = s0->v[x] * 5
+    sljit_emit_op1(dyn->c, SLJIT_IMOV_UB, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x);
+    sljit_emit_op2(dyn->c, SLJIT_IMUL, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_IMM, 5);
+
+    // r0 = (r0 + r1) & 0xfff
+    sljit_emit_op2(dyn->c, SLJIT_IADD, SLJIT_R0, 0, SLJIT_R0, 0, SLJIT_R1, 0);
+    sljit_emit_op2(dyn->c, SLJIT_IAND, SLJIT_R0, 0, SLJIT_R0, 0, SLJIT_IMM, 0xfff);
+
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UH, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, i), SLJIT_R0, 0);
+
+    sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
+    return (c8dyn_op_t)sljit_generate_code(dyn->c);
+}
 
 static c8dyn_op_t c8dyn_translate(chip8_t *c8)
 {
@@ -604,12 +640,9 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
 //        tac->d  = (uintptr_t)vx;
 //        tac->a  = kk;
 //        break;
-//    case 0xd: // drw vx, vy, nibble
-//        tac->op = c8dyn_drw;
-//        tac->d  = (uintptr_t)vx;
-//        tac->a  = (uintptr_t)vy;
-//        tac->b  = instr & 0xf;
-//        break;
+    case 0xd: // drw vx, vy, nibble
+        *fn = c8dyn_emit_draw(c8, dyn, x, y, instr & 0xf);
+        break;
 //    case 0xe: // op vx
 //        switch (instr & 0xff)
 //        {
@@ -644,11 +677,9 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
         case 0x1e: // add i, vx
             *fn = c8dyn_emit_add(c8, dyn, CHIP8_I, x);
             break;
-//        case 0x29: // ld f, vx
-//            tac->op = c8dyn_ld_f;
-//            tac->d  = (uintptr_t)&c8->i;
-//            tac->a  = (uintptr_t)vx;
-//            break;
+        case 0x29: // ld f, vx
+            *fn = c8dyn_emit_load_f(c8, dyn, x);
+            break;
 //        case 0x33: // ld b, vx
 //            tac->op = c8dyn_ld_bcd;
 //            tac->a  = (uintptr_t)vx;
@@ -665,8 +696,8 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
         break;
     }
 
-    fprintf(stderr, "PC=%04x\n", c8->pc);
-    dump_code(*fn, sljit_get_generated_code_size(dyn->c));
+//    fprintf(stderr, "PC=%04x\n", c8->pc);
+//    dump_code(*fn, sljit_get_generated_code_size(dyn->c));
 
     if (!*fn)
         fprintf(stderr, "Compiler error: %i\n", sljit_get_compiler_error(dyn->c));
@@ -697,7 +728,7 @@ static void c8_dyn_step(chip8_t *c8)
 
         fn(c8);
 
-        fprintf(stderr, "Next PC is %04x\n", c8->pc);
+//        fprintf(stderr, "Next PC is %04x\n", c8->pc);
 
         c8->run_time++;
         c8->cycles--;
