@@ -48,7 +48,7 @@ static void SLJIT_CALL c8dyn_ret(chip8_t *c8)
 static void SLJIT_CALL c8dyn_call(chip8_t *c8, uint16_t addr)
 {
     c8_push(c8);
-    c8dyn_call(c8, addr);
+    c8_jump(c8, addr);
 }
 
 static void SLJIT_CALL c8dyn_draw(chip8_t *c8, uint16_t xy, uint8_t nrows)
@@ -71,27 +71,10 @@ static void SLJIT_CALL c8dyn_load_ram(chip8_t *c8, bool from_ram, uint8_t x)
     c8_load_ram(c8, from_ram, x);
 }
 
-//c8dyn_def_begin(illegal)
-//    c8->state |= CHIP8_STATE_ILEGAL;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(ld_f)
-//    *(uint16_t*)d = CHIP8_FONT_ADDR + *(uint8_t*)a * 5;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(ld_bcd)
-//    uint8_t v = *(uint8_t*)a;
-//    c8->ram[(c8->i+0) & 0xfff] = v / 100;
-//    c8->ram[(c8->i+1) & 0xfff] = v / 10 % 10;
-//    c8->ram[(c8->i+2) & 0xfff] = v % 10;
-
-//    c8dyn_invalidate(c8, c8->i, c8->i+2);
-//c8dyn_def_end()
-
-//c8dyn_def_begin(rnd)
-
-//    *(uint8_t*)d = rand() & a;
-//c8dyn_def_end()
+static uint8_t SLJIT_CALL c8dyn_rnd(chip8_t *c8, uint8_t mask)
+{
+    return rand() & mask;
+}
 
 static void dump_code(void *code, sljit_uw len)
 {
@@ -152,6 +135,21 @@ static c8dyn_op_t c8dyn_emit_jp_nnn(chip8_t *c8, c8dyn_t *dyn, uint16_t nnn)
     // R0 = S0; R1 = nnn; c8_jump(R0, R1);
     sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
     sljit_emit_op1(dyn->c, SLJIT_MOV_UH, SLJIT_R1, 0, SLJIT_IMM, nnn & 0xfff);
+    sljit_emit_ijump(dyn->c, SLJIT_CALL2, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_jump));
+
+    sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
+
+    return (c8dyn_op_t)sljit_generate_code(dyn->c);
+}
+
+static c8dyn_op_t c8dyn_emit_jp_disp(chip8_t *c8, c8dyn_t *dyn, uint16_t nnn)
+{
+    sljit_emit_enter(dyn->c, 0, 1, 2, 1, 0, 0, 0);
+
+    // R0 = S0; R1 = S0->v[x] + nnn; c8_jump(R0, R1);
+    sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
+    sljit_emit_op1(dyn->c, SLJIT_IMOV_UB, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + 0);
+    sljit_emit_op2(dyn->c, SLJIT_ADD, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_IMM, nnn & 0xfff);
     sljit_emit_ijump(dyn->c, SLJIT_CALL2, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_jump));
 
     sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
@@ -600,9 +598,8 @@ static c8dyn_op_t c8dyn_emit_load_ram(chip8_t *c8, c8dyn_t *dyn, bool from_ram, 
     }
 
     sljit_emit_enter(dyn->c, 0, 1, 3, 1, 0, 0, 0);
-    sljit_emit_op0(dyn->c, SLJIT_BREAKPOINT);
 
-    if (from_ram)
+    if (!from_ram)
     {
         // R0 = S0;
         sljit_emit_op1(dyn->c, SLJIT_MOV, SLJIT_R0, 0, SLJIT_S0, 0);
@@ -617,6 +614,27 @@ static c8dyn_op_t c8dyn_emit_load_ram(chip8_t *c8, c8dyn_t *dyn, bool from_ram, 
     sljit_emit_op1(dyn->c, SLJIT_IMOV_UB, SLJIT_R1, 0, SLJIT_IMM, from_ram);
     sljit_emit_op1(dyn->c, SLJIT_IMOV_UB, SLJIT_R2, 0, SLJIT_IMM, x);
     sljit_emit_ijump(dyn->c, SLJIT_CALL3, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_load_ram));
+
+    sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
+
+    return (c8dyn_op_t)sljit_generate_code(dyn->c);
+}
+
+static c8dyn_op_t c8dyn_emit_rnd(chip8_t *c8, c8dyn_t *dyn, uint8_t x, uint8_t kk)
+{
+    if (x > CHIP8_LAST_V_REG)
+    {
+        fprintf(stderr, "load_ram: invalid register %1x\n", x);
+        exit(1);
+    }
+
+    sljit_emit_enter(dyn->c, 0, 1, 2, 1, 0, 0, 0);
+
+    // S0->v[x] = c8dyn_rnd(c8, kk);
+    sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R1, 0, SLJIT_IMM, kk);
+    sljit_emit_ijump(dyn->c, SLJIT_CALL2, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_rnd));
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_R0, 0);
 
     sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
 
@@ -714,16 +732,12 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
     case 0xa: // ld i, nnn
         *fn = c8dyn_emit_load_imm(c8, dyn, CHIP8_I, nnn);
         break;
-//    case 0xb: // jp v0, addr
-//        tac->op = c8dyn_jp_nnn;
-//        tac->a  = (uintptr_t)vx;
-//        tac->b  = nnn;
-//        break;
-//    case 0xc: // rnd vx, byte
-//        tac->op = c8dyn_rnd;
-//        tac->d  = (uintptr_t)vx;
-//        tac->a  = kk;
-//        break;
+    case 0xb: // jp v0, addr
+        *fn = c8dyn_emit_jp_disp(c8, dyn, nnn);
+        break;
+    case 0xc: // rnd vx, byte
+        *fn = c8dyn_emit_rnd(c8, dyn, x, kk);
+        break;
     case 0xd: // drw vx, vy, nibble
         *fn = c8dyn_emit_draw(c8, dyn, x, y, instr & 0xf);
         break;
@@ -772,8 +786,8 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
         break;
     }
 
-    fprintf(stderr, "PC=%04x\n", c8->pc);
-    dump_code(*fn, sljit_get_generated_code_size(dyn->c));
+//    fprintf(stderr, "PC=%04x\n", c8->pc);
+//    dump_code(*fn, sljit_get_generated_code_size(dyn->c));
 
     if (!*fn)
         fprintf(stderr, "Compiler error: %i\n", sljit_get_compiler_error(dyn->c));

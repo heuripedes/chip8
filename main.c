@@ -10,7 +10,7 @@
 
 static chip8_t *c8 = NULL;
 
-#if 0
+#if 1
 void kbd_poll(uint8_t kbd[16], uintptr_t data)
 {
     memset(kbd, 0, 16);
