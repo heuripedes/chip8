@@ -120,5 +120,25 @@ static inline void c8_clear(chip8_t *c8)
     memset(c8->vram, 0, CHIP8_VIDEO_ROWS*CHIP8_VIDEO_COLS);
 }
 
+static inline uint8_t c8_wait_key(chip8_t *c8)
+{
+    uint8_t result = 255;
+
+    for (int i = 0; i < 16; ++i)
+    {
+        if (c8->kbd[i])
+        {
+            result = i;
+            break;
+        }
+    }
+
+    if (result == 255)
+        c8->pc -= 2;
+
+    return result;
+}
+
+
 #endif // CHIP8_PRIVATE_H
 

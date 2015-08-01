@@ -541,7 +541,6 @@ static c8dyn_op_t c8dyn_emit_load_f(chip8_t *c8, c8dyn_t *dyn, uint8_t x)
 
 static c8dyn_op_t c8dyn_emit_cond_key(chip8_t *c8, c8dyn_t *dyn, bool equal, uint8_t x)
 {
-
     if (x > CHIP8_LAST_V_REG)
     {
         fprintf(stderr, "%s: invalid register %1x\n", (equal ? "skp" : "sknp"), x);
@@ -555,7 +554,6 @@ static c8dyn_op_t c8dyn_emit_cond_key(chip8_t *c8, c8dyn_t *dyn, bool equal, uin
 
     sljit_emit_enter(dyn->c, 0, 1, 2, 1, 0, 0, 0);
 
-    sljit_emit_op0(dyn->c, SLJIT_BREAKPOINT);
     // R0 = S0->v[x]; R1 = offsetof(chip8_t, kbd) + R0;
     sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x);
     sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_IMM, SLJIT_OFFSETOF(chip8_t, kbd));
@@ -565,6 +563,25 @@ static c8dyn_op_t c8dyn_emit_cond_key(chip8_t *c8, c8dyn_t *dyn, bool equal, uin
     sljit_emit_op2(dyn->c, SLJIT_ADD, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, pc), SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, pc), SLJIT_IMM, 2);
 
     sljit_set_label(dont_skip, sljit_emit_label(dyn->c));
+    sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
+
+    return (c8dyn_op_t)sljit_generate_code(dyn->c);
+}
+
+static c8dyn_op_t c8dyn_emit_wait_key(chip8_t *c8, c8dyn_t *dyn, uint8_t x)
+{
+    if (x > CHIP8_LAST_V_REG)
+    {
+        fprintf(stderr, "wait_key: invalid register %1x\n", x);
+        exit(1);
+    }
+
+    sljit_emit_enter(dyn->c, 0, 1, 1, 1, 0, 0, 0);
+
+    sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
+    sljit_emit_ijump(dyn->c, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8_wait_key));
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_R0, 0);
+
     sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
 
     return (c8dyn_op_t)sljit_generate_code(dyn->c);
@@ -691,12 +708,9 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
         case 0x07: // ld vx, dt
             *fn = c8dyn_emit_load(c8, dyn, x, CHIP8_DT);
             break;
-//        case 0x0a: // ld vx, key
-//        {
-//            tac->op = c8dyn_ld_key;
-//            tac->d  = (uintptr_t)vx;
-//            break;
-//        }
+        case 0x0a: // ld vx, key
+            *fn = c8dyn_emit_wait_key(c8, dyn, x);
+            break;
         case 0x15: // ld dt, vx
             *fn = c8dyn_emit_load(c8, dyn, CHIP8_DT, x);
             break;
