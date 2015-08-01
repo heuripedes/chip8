@@ -539,6 +539,37 @@ static c8dyn_op_t c8dyn_emit_load_f(chip8_t *c8, c8dyn_t *dyn, uint8_t x)
     return (c8dyn_op_t)sljit_generate_code(dyn->c);
 }
 
+static c8dyn_op_t c8dyn_emit_cond_key(chip8_t *c8, c8dyn_t *dyn, bool equal, uint8_t x)
+{
+
+    if (x > CHIP8_LAST_V_REG)
+    {
+        fprintf(stderr, "%s: invalid register %1x\n", (equal ? "skp" : "sknp"), x);
+        exit(1);
+    }
+
+    struct sljit_jump *dont_skip;
+
+    // because of early return, equal == SLJIT_NOT_EQUAL, !equal == SLJIT_EQUAL
+    sljit_si type = (equal ? SLJIT_NOT_EQUAL : SLJIT_EQUAL);
+
+    sljit_emit_enter(dyn->c, 0, 1, 2, 1, 0, 0, 0);
+
+    sljit_emit_op0(dyn->c, SLJIT_BREAKPOINT);
+    // R0 = S0->v[x]; R1 = offsetof(chip8_t, kbd) + R0;
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x);
+    sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_IMM, SLJIT_OFFSETOF(chip8_t, kbd));
+    sljit_emit_op2(dyn->c, SLJIT_ADD, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_R0, 0);
+
+    dont_skip = sljit_emit_cmp(dyn->c, type, SLJIT_MEM2(SLJIT_S0, SLJIT_R1), 0, SLJIT_IMM, 1);
+    sljit_emit_op2(dyn->c, SLJIT_ADD, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, pc), SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, pc), SLJIT_IMM, 2);
+
+    sljit_set_label(dont_skip, sljit_emit_label(dyn->c));
+    sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
+
+    return (c8dyn_op_t)sljit_generate_code(dyn->c);
+}
+
 static c8dyn_op_t c8dyn_translate(chip8_t *c8)
 {
     c8dyn_t   *dyn = (c8dyn_t*)c8->dyn;
@@ -625,7 +656,7 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
         break;
     }
     case 0x9: // sne vx, vy
-        *fn = c8dyn_emit_cond(c8, dyn, true, x, y);
+        *fn = c8dyn_emit_cond(c8, dyn, false, x, y);
         break;
     case 0xa: // ld i, nnn
         *fn = c8dyn_emit_load_imm(c8, dyn, CHIP8_I, nnn);
@@ -643,19 +674,17 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
     case 0xd: // drw vx, vy, nibble
         *fn = c8dyn_emit_draw(c8, dyn, x, y, instr & 0xf);
         break;
-//    case 0xe: // op vx
-//        switch (instr & 0xff)
-//        {
-//        case 0x9e: // skp vx
-//            tac->op = c8dyn_skp;
-//            tac->a  = (uintptr_t)vx;
-//            break;
-//        case 0xa1: // sknp vx
-//            tac->op = c8dyn_sknp;
-//            tac->a  = (uintptr_t)vx;
-//            break;
-//        }
-//        break;
+    case 0xe: // op vx
+        switch (instr & 0xff)
+        {
+        case 0x9e: // skp vx
+            *fn = c8dyn_emit_cond_key(c8, dyn, true, x);
+            break;
+        case 0xa1: // sknp vx
+            *fn = c8dyn_emit_cond_key(c8, dyn, false, x);
+            break;
+        }
+        break;
     case 0xf: // op o1, o2
         switch (instr & 0xff)
         {
@@ -696,8 +725,8 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
         break;
     }
 
-//    fprintf(stderr, "PC=%04x\n", c8->pc);
-//    dump_code(*fn, sljit_get_generated_code_size(dyn->c));
+    fprintf(stderr, "PC=%04x\n", c8->pc);
+    dump_code(*fn, sljit_get_generated_code_size(dyn->c));
 
     if (!*fn)
         fprintf(stderr, "Compiler error: %i\n", sljit_get_compiler_error(dyn->c));
