@@ -135,24 +135,8 @@ static void c8_naive_step(chip8_t *c8)
             *vx = c8->dt;
             break;
         case 0x0a: // ld vx, key
-        {
-            uint8_t result = 255;
-
-            for (int i = 0; i < 16; ++i)
-            {
-                if (c8->kbd[i])
-                {
-                    result = i;
-                    break;
-                }
-            }
-
-            if (result == 255)
-                c8->pc -= 2;
-            else
-                *vx = result;
+            *vx = c8_wait_key(c8);
             break;
-        }
         case 0x15: // ld dt, vx
             c8->dt = *vx;
             break;
@@ -167,17 +151,13 @@ static void c8_naive_step(chip8_t *c8)
             c8->i = CHIP8_FONT_ADDR + *vx * 5;
             break;
         case 0x33: // ld b, vx
-            c8->ram[(c8->i+0) & 0xfff] = *vx / 100;
-            c8->ram[(c8->i+1) & 0xfff] = *vx / 10 % 10;
-            c8->ram[(c8->i+2) & 0xfff] = *vx % 10;
+            c8_load_bcd(c8, *vx);
             break;
         case 0x55: // ld [i], vx
-            memcpy(&c8->ram[c8->i], c8->v, x+1);
-            c8->i = c8->i+x+1;
+            c8_load_ram(c8, false, x);
             break;
         case 0x65: // ld vx, [i]
-            memcpy(c8->v, &c8->ram[c8->i], x+1);
-            c8->i = c8->i+x+1;
+            c8_load_ram(c8, true, x);
             break;
         default:
             c8->state |= CHIP8_STATE_ILEGAL;

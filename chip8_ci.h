@@ -89,25 +89,17 @@ c8ci_def_begin(ld_f)
 c8ci_def_end()
 
 c8ci_def_begin(ld_bcd)
-    uint8_t v = *(uint8_t*)a;
-    c8->ram[(c8->i+0) & 0xfff] = v / 100;
-    c8->ram[(c8->i+1) & 0xfff] = v / 10 % 10;
-    c8->ram[(c8->i+2) & 0xfff] = v % 10;
-
+    c8_load_bcd(c8, a);
     c8ci_invalidate(c8, c8->i, c8->i+2);
 c8ci_def_end()
 
 c8ci_def_begin(ld_r2m)
-    ptrdiff_t x = a - (uintptr_t)c8->v;
-    c8ci_invalidate(c8, c8->i, x+1);
-    memcpy(&c8->ram[c8->i], c8->v, x+1);
-    c8->i = c8->i+x+1;
+    c8_load_ram(c8, false, a);
+    c8ci_invalidate(c8, c8->i, a+1);
 c8ci_def_end()
 
 c8ci_def_begin(ld_m2r)
-    ptrdiff_t x = a - (uintptr_t)c8->v;
-    memcpy(c8->v, &c8->ram[c8->i], x+1);
-    c8->i = c8->i+x+1;
+    c8_load_ram(c8, true, a);
 c8ci_def_end()
 
 c8ci_def_begin(add_kk)
@@ -137,59 +129,38 @@ c8ci_def_begin(add)
 c8ci_def_end()
 
 c8ci_def_begin(sub)
-
     c8->v[15] = *(uint8_t*)a > *(uint8_t*)a;
     *(uint8_t*)d = *(uint8_t*)a - *(uint8_t*)b;
 c8ci_def_end()
 
 c8ci_def_begin(shr)
-
     c8->v[15] = *(uint8_t*)a & 1;
     *(uint8_t*)d = *(uint8_t*)a >> 1;
 c8ci_def_end()
 
 c8ci_def_begin(shl)
-
     c8->v[15] = *(uint8_t*)a >> 7;
     *(uint8_t*)d = *(uint8_t*)a << 1;
 c8ci_def_end()
 
 c8ci_def_begin(rnd)
-
     *(uint8_t*)d = rand() & a;
 c8ci_def_end()
 
 c8ci_def_begin(drw)
-
     c8_draw(c8, *(uint8_t*)d, *(uint8_t*)a, b);
 c8ci_def_end()
 
 c8ci_def_begin(skp)
-
     c8->pc += c8->kbd[*(uint8_t*)a] * 2;
 c8ci_def_end()
 
 c8ci_def_begin(sknp)
-
     c8->pc += (!c8->kbd[*(uint8_t*)a]) * 2;
 c8ci_def_end()
 
 c8ci_def_begin(ld_key)
-    uint8_t result = 255;
-
-    for (int i = 0; i < 16; ++i)
-    {
-        if (c8->kbd[i])
-        {
-            result = i;
-            break;
-        }
-    }
-
-    if (result == 255)
-        c8->pc -= 2;
-    else
-        *(uint8_t*)d = result;
+    *(uint8_t*)d = c8_wait_key(c8);
 c8ci_def_end()
 
 static void c8ci_translate(chip8_t *c8, C8CI_OP_ARGS)
@@ -394,15 +365,15 @@ static void c8ci_translate(chip8_t *c8, C8CI_OP_ARGS)
             break;
         case 0x33: // ld b, vx
             tac->op = c8ci_ld_bcd;
-            tac->a  = (uintptr_t)vx;
+            tac->a  = (uintptr_t)x;
             break;
         case 0x55: // ld [i], vx
             tac->op = c8ci_ld_r2m;
-            tac->a  = (uintptr_t)vx;
+            tac->a  = (uintptr_t)x;
             break;
         case 0x65: // ld vx, [i]
             tac->op = c8ci_ld_m2r;
-            tac->a  = (uintptr_t)vx;
+            tac->a  = (uintptr_t)x;
             break;
         }
         break;
