@@ -139,6 +139,23 @@ static inline uint8_t c8_wait_key(chip8_t *c8)
     return result;
 }
 
+static inline void c8_load_bcd(chip8_t *c8, uint8_t val)
+{
+    c8->ram[(c8->i+0) & 0xfff] = val / 100;
+    c8->ram[(c8->i+1) & 0xfff] = val / 10 % 10;
+    c8->ram[(c8->i+2) & 0xfff] = val % 10;
+}
+
+static inline void c8_load_ram(chip8_t *c8, bool from_ram, uint8_t x)
+{
+    if (from_ram)
+        memcpy(c8->v, &c8->ram[c8->i], x+1);
+    else
+        memcpy(&c8->ram[c8->i], c8->v, x+1);
+
+    c8->i = c8->i+x+1;
+}
+
 
 #endif // CHIP8_PRIVATE_H
 

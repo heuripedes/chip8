@@ -19,11 +19,13 @@ typedef struct {
 #define c8dyn_def_begin(name) static void c8dyn_##name(chip8_t *c8, C8DYN_OP_ARGS) { c8->pc += 2;
 #define c8dyn_def_end(name) }
 
-static void c8dyn_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
+static void SLJIT_CALL c8dyn_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
 {
     c8dyn_t *dyn = (c8dyn_t*)c8->dyn;
 
-    for (uint16_t i = begin; i < end; ++i)
+    end &= 0xfff;
+
+    for (uint16_t i = begin; i <= end; ++i)
     {
         if (dyn->cache[i])
         {
@@ -31,6 +33,42 @@ static void c8dyn_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
             dyn->cache[i] = NULL;
         }
     }
+}
+
+static void SLJIT_CALL c8dyn_jump(chip8_t *c8, uint16_t addr)
+{
+    c8_jump(c8, addr);
+}
+
+static void SLJIT_CALL c8dyn_ret(chip8_t *c8)
+{
+    c8_pop(c8);
+}
+
+static void SLJIT_CALL c8dyn_call(chip8_t *c8, uint16_t addr)
+{
+    c8_push(c8);
+    c8dyn_call(c8, addr);
+}
+
+static void SLJIT_CALL c8dyn_draw(chip8_t *c8, uint16_t xy, uint8_t nrows)
+{
+    c8_draw(c8, xy >> 8, xy & 0xFF, nrows);
+}
+
+static uint8_t SLJIT_CALL c8dyn_wait_key(chip8_t *c8)
+{
+    return c8_wait_key(c8);
+}
+
+static void SLJIT_CALL c8dyn_load_bcd(chip8_t *c8, uint8_t val)
+{
+    c8_load_bcd(c8, val);
+}
+
+static void SLJIT_CALL c8dyn_load_ram(chip8_t *c8, bool from_ram, uint8_t x)
+{
+    c8_load_ram(c8, from_ram, x);
 }
 
 //c8dyn_def_begin(illegal)
@@ -50,71 +88,9 @@ static void c8dyn_invalidate(chip8_t *c8, uint16_t begin, uint16_t end)
 //    c8dyn_invalidate(c8, c8->i, c8->i+2);
 //c8dyn_def_end()
 
-//c8dyn_def_begin(ld_r2m)
-//    ptrdiff_t x = a - (uintptr_t)c8->v;
-//    c8dyn_invalidate(c8, c8->i, x+1);
-//    memcpy(&c8->ram[c8->i], c8->v, x+1);
-//    c8->i = c8->i+x+1;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(ld_m2r)
-//    ptrdiff_t x = a - (uintptr_t)c8->v;
-//    memcpy(c8->v, &c8->ram[c8->i], x+1);
-//    c8->i = c8->i+x+1;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(add)
-//    if ((uintptr_t)&c8->i == a)
-//        *(uint16_t*)d = *(uint16_t*)a + *(uint8_t*)b;
-//    else
-//    {
-//        c8->v[15] = ((uint32_t)*(uint8_t*)a + (uint32_t)*(uint8_t*)b) > 0xff;
-//        *(uint8_t*)d = *(uint8_t*)a + *(uint8_t*)b;
-//    }
-//c8dyn_def_end()
-
-//c8dyn_def_begin(sub)
-
-//    c8->v[15] = *(uint8_t*)a > *(uint8_t*)a;
-//    *(uint8_t*)d = *(uint8_t*)a - *(uint8_t*)b;
-//c8dyn_def_end()
-
 //c8dyn_def_begin(rnd)
 
 //    *(uint8_t*)d = rand() & a;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(drw)
-
-//    c8_draw(c8, *(uint8_t*)d, *(uint8_t*)a, b);
-//c8dyn_def_end()
-
-//c8dyn_def_begin(skp)
-
-//    c8->pc += c8->kbd[*(uint8_t*)a] * 2;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(sknp)
-
-//    c8->pc += (!c8->kbd[*(uint8_t*)a]) * 2;
-//c8dyn_def_end()
-
-//c8dyn_def_begin(ld_key)
-//    uint8_t result = 255;
-
-//    for (int i = 0; i < 16; ++i)
-//    {
-//        if (c8->kbd[i])
-//        {
-//            result = i;
-//            break;
-//        }
-//    }
-
-//    if (result == 255)
-//        c8->pc -= 2;
-//    else
-//        *(uint8_t*)d = result;
 //c8dyn_def_end()
 
 static void dump_code(void *code, sljit_uw len)
@@ -134,7 +110,7 @@ static void dump_code(void *code, sljit_uw len)
 
 #if defined(SLJIT_CONFIG_X86_64)
 
-    system("objdump -b binary -m l1om -D /tmp/slj_dump | grep ':\t'");
+    system("objdump -b binary -m l1om -M intel -D /tmp/slj_dump | grep ':\t'");
 
 #elif defined(SLJIT_CONFIG_X86_32)
 
@@ -162,7 +138,7 @@ static c8dyn_op_t c8dyn_emit_ret(chip8_t *c8, c8dyn_t *dyn)
 
     // R0 = S0; c8_pop(R0);
     sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
-    sljit_emit_ijump(dyn->c, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8_pop));
+    sljit_emit_ijump(dyn->c, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_ret));
 
     sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
 
@@ -176,7 +152,7 @@ static c8dyn_op_t c8dyn_emit_jp_nnn(chip8_t *c8, c8dyn_t *dyn, uint16_t nnn)
     // R0 = S0; R1 = nnn; c8_jump(R0, R1);
     sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
     sljit_emit_op1(dyn->c, SLJIT_MOV_UH, SLJIT_R1, 0, SLJIT_IMM, nnn & 0xfff);
-    sljit_emit_ijump(dyn->c, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8_jump));
+    sljit_emit_ijump(dyn->c, SLJIT_CALL2, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_jump));
 
     sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
 
@@ -187,14 +163,10 @@ static c8dyn_op_t c8dyn_emit_call_nnn(chip8_t *c8, c8dyn_t *dyn, uint16_t nnn)
 {
     sljit_emit_enter(dyn->c, 0, 1, 2, 1, 0, 0, 0);
 
-    // R0 = S0; c8_push(R0);
-    sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
-    sljit_emit_ijump(dyn->c, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8_push));
-
-    // R0 = S0; R1 = nnn; c8_jump(R0, R1);
+    // R0 = S0; R1 = nnn; c8dyn_jump(R0, R1);
     sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
     sljit_emit_op1(dyn->c, SLJIT_MOV_UH, SLJIT_R1, 0, SLJIT_IMM, nnn & 0xfff);
-    sljit_emit_ijump(dyn->c, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8_jump));
+    sljit_emit_ijump(dyn->c, SLJIT_CALL2, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_call));
 
     sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
 
@@ -504,13 +476,19 @@ invalid:
 
 static c8dyn_op_t c8dyn_emit_draw(chip8_t *c8, c8dyn_t *dyn, uint8_t x, uint8_t y, uint8_t height)
 {
-    sljit_emit_enter(dyn->c, 0, 1, 4, 1, 0, 0, 0);
+    sljit_emit_enter(dyn->c, 0, 1, 3, 1, 0, 0, 0);
 
     sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
+    // R1 = S0->v[x]; R2 = S0->v[x]; R1 = R1 << 8; R1 = R1 | R2;
     sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x);
     sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + y);
-    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R3, 0, SLJIT_IMM, height);
-    sljit_emit_ijump(dyn->c, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8_draw));
+    sljit_emit_op2(dyn->c, SLJIT_SHL, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_IMM, 8);
+    sljit_emit_op2(dyn->c , SLJIT_OR, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_R2, 0);
+    // R2 = height
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_R2, 0, SLJIT_IMM, height);
+
+    // c8dyn_draw(r0, r1, r2);
+    sljit_emit_ijump(dyn->c, SLJIT_CALL3, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_draw));
 
     sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
 
@@ -520,7 +498,6 @@ static c8dyn_op_t c8dyn_emit_draw(chip8_t *c8, c8dyn_t *dyn, uint8_t x, uint8_t 
 static c8dyn_op_t c8dyn_emit_load_f(chip8_t *c8, c8dyn_t *dyn, uint8_t x)
 {
     sljit_emit_enter(dyn->c, 0, 1, 2, 1, 0, 0, 0);
-
 
     // r0 = f
     sljit_emit_op1(dyn->c, SLJIT_IMOV_UH, SLJIT_R0, 0, SLJIT_IMM, CHIP8_FONT_ADDR);
@@ -579,8 +556,67 @@ static c8dyn_op_t c8dyn_emit_wait_key(chip8_t *c8, c8dyn_t *dyn, uint8_t x)
     sljit_emit_enter(dyn->c, 0, 1, 1, 1, 0, 0, 0);
 
     sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
-    sljit_emit_ijump(dyn->c, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8_wait_key));
+    sljit_emit_ijump(dyn->c, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_wait_key));
     sljit_emit_op1(dyn->c, SLJIT_MOV_UB, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x, SLJIT_R0, 0);
+
+    sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
+
+    return (c8dyn_op_t)sljit_generate_code(dyn->c);
+}
+
+static c8dyn_op_t c8dyn_emit_load_bcd(chip8_t *c8, c8dyn_t *dyn, uint8_t x)
+{
+    if (x > CHIP8_LAST_V_REG)
+    {
+        fprintf(stderr, "load_bcd: invalid register %1x\n", x);
+        exit(1);
+    }
+
+    sljit_emit_enter(dyn->c, 0, 1, 3, 1, 0, 0, 0);
+
+    // R0 = S0;
+    sljit_emit_op1(dyn->c, SLJIT_MOV, SLJIT_R0, 0, SLJIT_S0, 0);
+    // R1 = S0->i; R2 = R1 + 2
+    sljit_emit_op1(dyn->c, SLJIT_MOV_UH, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, i));
+    sljit_emit_op2(dyn->c, SLJIT_ADD, SLJIT_R2, 0, SLJIT_R1, 0, SLJIT_IMM, 2);
+
+    sljit_emit_ijump(dyn->c, SLJIT_CALL3, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_invalidate));
+
+    sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
+    sljit_emit_op1(dyn->c, SLJIT_IMOV_UB, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, v) + x);
+    sljit_emit_ijump(dyn->c, SLJIT_CALL2, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_load_bcd));
+
+    sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
+
+    return (c8dyn_op_t)sljit_generate_code(dyn->c);
+}
+
+static c8dyn_op_t c8dyn_emit_load_ram(chip8_t *c8, c8dyn_t *dyn, bool from_ram, uint8_t x)
+{
+    if (x > CHIP8_LAST_V_REG)
+    {
+        fprintf(stderr, "load_ram: invalid register %1x\n", x);
+        exit(1);
+    }
+
+    sljit_emit_enter(dyn->c, 0, 1, 3, 1, 0, 0, 0);
+    sljit_emit_op0(dyn->c, SLJIT_BREAKPOINT);
+
+    if (from_ram)
+    {
+        // R0 = S0;
+        sljit_emit_op1(dyn->c, SLJIT_MOV, SLJIT_R0, 0, SLJIT_S0, 0);
+        // R1 = S0->i; R2 = R1 + 2
+        sljit_emit_op1(dyn->c, SLJIT_MOV_UH, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_S0), SLJIT_OFFSETOF(chip8_t, i));
+        sljit_emit_op2(dyn->c, SLJIT_ADD, SLJIT_R2, 0, SLJIT_R1, 0, SLJIT_IMM, x);
+
+        sljit_emit_ijump(dyn->c, SLJIT_CALL3, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_invalidate));
+    }
+
+    sljit_emit_op1(dyn->c, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_S0, 0);
+    sljit_emit_op1(dyn->c, SLJIT_IMOV_UB, SLJIT_R1, 0, SLJIT_IMM, from_ram);
+    sljit_emit_op1(dyn->c, SLJIT_IMOV_UB, SLJIT_R2, 0, SLJIT_IMM, x);
+    sljit_emit_ijump(dyn->c, SLJIT_CALL3, SLJIT_IMM, SLJIT_FUNC_OFFSET(c8dyn_load_ram));
 
     sljit_emit_return(dyn->c, SLJIT_UNUSED, 0, 0);
 
@@ -723,18 +759,15 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
         case 0x29: // ld f, vx
             *fn = c8dyn_emit_load_f(c8, dyn, x);
             break;
-//        case 0x33: // ld b, vx
-//            tac->op = c8dyn_ld_bcd;
-//            tac->a  = (uintptr_t)vx;
-//            break;
-//        case 0x55: // ld [i], vx
-//            tac->op = c8dyn_ld_r2m;
-//            tac->a  = (uintptr_t)vx;
-//            break;
-//        case 0x65: // ld vx, [i]
-//            tac->op = c8dyn_ld_m2r;
-//            tac->a  = (uintptr_t)vx;
-//            break;
+        case 0x33: // ld b, vx
+            *fn = c8dyn_emit_load_bcd(c8, dyn, x);
+            break;
+        case 0x55: // ld [i], vx
+            *fn = c8dyn_emit_load_ram(c8, dyn, true, x);
+            break;
+        case 0x65: // ld vx, [i]
+            *fn = c8dyn_emit_load_ram(c8, dyn, false, x);
+            break;
         }
         break;
     }
