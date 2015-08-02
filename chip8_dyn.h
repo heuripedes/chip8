@@ -846,17 +846,17 @@ static c8dyn_op_t c8dyn_translate(chip8_t *c8)
             *fn = c8dyn_emit_load_bcd(c8, dyn, x);
             break;
         case 0x55: // ld [i], vx
-            *fn = c8dyn_emit_load_ram(c8, dyn, true, x);
+            *fn = c8dyn_emit_load_ram(c8, dyn, false, x);
             break;
         case 0x65: // ld vx, [i]
-            *fn = c8dyn_emit_load_ram(c8, dyn, false, x);
+            *fn = c8dyn_emit_load_ram(c8, dyn, true, x);
             break;
         }
         break;
     }
 
-    fprintf(stderr, "PC=%04x\n", c8->pc);
-    dump_code(*fn, sljit_get_generated_code_size(dyn->c));
+//    fprintf(stderr, "PC=%04x\n", c8->pc);
+//    dump_code(*fn, sljit_get_generated_code_size(dyn->c));
 
     if (!*fn)
         fprintf(stderr, "Compiler error: %i\n", sljit_get_compiler_error(dyn->c));
