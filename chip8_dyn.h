@@ -9,7 +9,7 @@
  * to a native function.
  */
 
-typedef void (*c8dyn_op_t)(chip8_t *c8);
+typedef void SLJIT_CALL (*c8dyn_op_t)(chip8_t *c8);
 
 typedef struct {
     struct sljit_compiler *c;
